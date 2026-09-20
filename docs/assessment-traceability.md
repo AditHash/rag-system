@@ -1,0 +1,39 @@
+# Assessment traceability
+
+Source: local `project-information/Aditya_Assessment.pdf`, all four pages reviewed on 2026-09-20. The PDF controls requirements; `plan.md` controls our implementation choices. All checks below are future acceptance evidence, not executed tests.
+
+A0 documentation gate: **PASS**. Every requirement is mapped below; **all product requirements remain unimplemented and unverified**.
+
+| ID | PDF location | Requirement / expectation | Planned tasks | Required evidence |
+|---|---|---|---|---|
+| R01 | p1 §1; p3 §3 | Small real service deployed live on AWS; use managed services where reasonable | A1, D4–D5 | Actual deployment and fresh-client callable API |
+| R02 | p1 §2 | Upload documents; extract, chunk, embed, store for retrieval | A3, B1–B9 | Extraction/page, chunk, embedding, transaction and ingestion HTTP tests; completed real upload |
+| R03 | p1 §2 | Natural-language query retrieves relevant chunks and generates grounded answer | C1–C8 | Retrieval ordering/scope and full query tests; real answer |
+| R04 | p1 §2 | Each answer cites a verifiable original source | B3–B4, C6, D5 | Server-bound source metadata; invalid-citation rejection; visual source comparison |
+| R05 | p1 §2; p2 grounding | Refuse absent answers; demonstrate grounding mechanism (highest priority) | C4–C8, D1–D2, D5 | Unsupported/adversarial question tests; pre-generation gate; post-generation verification and measured refusal |
+| R06 | p2 evaluation; p3 §4 | Ground-truth question/expected-answer set and measured results; PDF suggests 10–15 | D1–D2 | Human-reviewed 10–15 cases per plan, actual scores/config, failure analysis; no mock metrics |
+| R07 | p2 cost; p3 cost note | Explain expensive components and cost-reduction decisions; bound model usage | A2, D2–D4, D6 | Approved per-call/recurring estimates, actual call counts, limits and cleanup |
+| R08 | p2 API | Clean upload/query API with basic auth or API key and input validation | A1, B1, B8–B9, C8, D3 | Auth, input caps, safe errors and HTTP contracts |
+| R09 | p3 §3 permissions/storage | Defensible AWS storage/access choices; least-needed IAM access and no hardcoded credentials | A2, B2, D3–D4 | Private S3 and scoped role policies, secret scan, approved storage/auth checks |
+| R10 | p3 §3 scope note | Explain any incomplete AWS work and how to finish it | A2, D4, D6–D7 | Honest blocker ledger, limitations and remaining actions |
+| R11 | p3 §4 | Submit callable live service with short example | D4–D7 | Real URL, fresh-client example and safe authentication handoff |
+| R12 | p3 §4 | GitHub code and short README: running and design decisions | A1, D6–D7 | Verified run instructions, repository access, decisions and secret check |
+| R13 | p3 §4 | Short architecture diagram of actual AWS setup | D4, D6 | Diagram matches deployed resources; proposed diagram is not evidence |
+| R14 | p1 §1; p4 §5 | Live walkthrough for Aasim and Suhas: upload, grounded answer/source, refusal | D5–D6 | Recorded dry run and source verification |
+| R15 | p4 §5 | Explain request path, bottlenecks, costs, chunking, embeddings, retrieval and any reranking | B4–B7, C1–C3, D6 | Defense notes, chunk-size tradeoff, model/dimension and retrieval rationale |
+| R16 | p4 §5 | Explain precise grounding/refusal mechanism and scoped Bedrock authentication | A2, B5, C4–C6, D3, D6 | Actual auth path and evidence-gate walkthrough with limitations |
+| R17 | p4 §5 | Explain evaluation construction, measurements, failures and small-set blind spots | D1–D2, D6 | Results and failure analysis; proposed hardening |
+| R18 | p4 §5 | Explain hardest decision/problem and scaling failure at 500K documents | D6 | Decision history and reasoned throughput, indexing, capacity and cost discussion; no scale claim |
+| R19 | p1 timeline | Five-day assessment timeline | D7 | Confirm exact cutoff externally; issue date absent from PDF |
+
+## Required outcomes versus selected mechanisms
+
+- AWS-native live deployment is required. PDF p3 explicitly calls its service list guidance, not a mandate. ECS Fargate, FastAPI, S3, PostgreSQL/pgvector and Bedrock are the user's selected stack; RDS hosting and ingress topology still require cost approval.
+- The plan selects PDF **and** UTF-8 TXT, versioned endpoints, `X-API-Key`, persistent status, READY-only retrieval, server-built citations and layered grounding. The PDF does not prescribe these exact interfaces or algorithms.
+- Evaluation is required. The plan adopts 10–15 cases from the PDF's suggested small-set size and adds explicit metrics.
+- Async ingestion is a plus in PDF p3. SQS/separate worker is conditional; reranking and Guardrails are optional. Neither is required for assessment compliance. Any demo worker must disclose restart/loss limitations.
+- AgentCore, OCR, frontend and GraphRAG are outside the selected scope. A running service, measured results and correct refusal take priority over optional features.
+
+## A0 source reconciliation
+
+The plan previously attributed a 17 September issue date to the PDF and asserted a 20 September target had passed. Neither claim is established by the supplied PDF. Corrected the introduction only; task ordering and frozen interfaces remain unchanged.

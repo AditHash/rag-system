@@ -1,0 +1,11 @@
+/project-information/
+
+# Local secrets and credentials
+.env
+.env.*
+!.env.example
+.aws/
+*.pem
+*.key
+credentials.json
+secrets.json

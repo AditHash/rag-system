@@ -1,0 +1,8 @@
+# Allow only the files required to build the runtime image.
+**
+!Dockerfile
+!pyproject.toml
+!uv.lock
+!src/
+!src/addroit_docqa/
+!src/addroit_docqa/*.py

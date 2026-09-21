@@ -1,0 +1,21 @@
+"""Local HTTP contract checks; no AWS credentials or network needed."""
+
+from fastapi.testclient import TestClient
+
+from addroit_docqa.main import create_app
+
+
+def test_health_contract() -> None:
+    with TestClient(create_app()) as client:
+        response = client.get("/health")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+    assert response.headers["content-type"] == "application/json"
+
+
+def test_only_health_is_exposed_in_openapi() -> None:
+    with TestClient(create_app()) as client:
+        schema = client.get("/openapi.json").json()
+        assert client.post("/api/v1/chat", json={"question": "hello"}).status_code == 404
+    assert set(schema["paths"]) == {"/health"}
+    assert "200" in schema["paths"]["/health"]["get"]["responses"]

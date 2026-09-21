@@ -37,3 +37,13 @@ A0 documentation gate: **PASS**. Every requirement is mapped below; **all produc
 ## A0 source reconciliation
 
 The plan previously attributed a 17 September issue date to the PDF and asserted a 20 September target had passed. Neither claim is established by the supplied PDF. Corrected the introduction only; task ordering and frozen interfaces remain unchanged.
+
+## A1 checkpoint — 2026-09-21
+
+R01/R08/R12 foundation now exists: installable FastAPI package, typed liveness route,
+locked dependencies, README commands, two passing local HTTP tests, clean lint and
+format checks, and successful fresh install/import. The Dockerfile is written but
+its build is **BLOCKED** by missing Docker WSL integration. No deployed service,
+authenticated application routes, ingestion, retrieval or evaluation exists.
+A0's statement of no implementation is historical; mandatory product outcomes
+remain unmet. A1 is not checked off until container validation passes.

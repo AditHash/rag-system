@@ -13,3 +13,13 @@ Recorded at A0, 2026-09-20. These are selected design directions, not implemente
 | Deterministic local fakes; separately approved live checks | Local testing without inference charges; fake success cannot establish real AWS access or evaluation quality | Planned test policy |
 
 Pending: confirmed deadline, region, authorized credential type/lifetime/billing, generation and embedding models/dimensions/quotas, worker mode, database hosting, ingress and approved budget. No secrets belong in these records.
+
+## A1 implementation choices — 2026-09-21
+
+Python 3.12 matches the available interpreter; uv 0.12.17 manages exact direct pins
+and a transitive lock. A `src` package and `create_app` factory support isolated
+construction and future injected providers. Only process liveness is implemented.
+Docker uses runtime-only dependencies, non-root UID 10001 and an allowlisted build
+context. Version-tagged base images can change; digest pinning and an actual build
+remain deployment/reproducibility considerations. Container validation is blocked
+by unavailable Docker Desktop integration in WSL; no deployment claim is made.

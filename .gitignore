@@ -9,3 +9,15 @@
 *.key
 credentials.json
 secrets.json
+
+# Python build and development artifacts
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+.coverage
+htmlcov/

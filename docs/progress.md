@@ -39,3 +39,33 @@ Next task after explicit user review: **A1 — Configure project**. STOP; do not
 ### A0 publication follow-up
 
 User authorized committing and pushing after each step. Publishing A0 does not start A1. Added defensive secret-file exclusions to `.gitignore` before publication; this small security change supersedes the initial baseline's ignore-policy limitation. Assessment PDF remains excluded. Commit scope: `.gitignore`, `AGENTS.md`, `plan.md`, and the four A0 documentation files. Existing duplicate `instruct.md` remains local and untracked to avoid maintaining two copies of the operating contract. Scan staged content for credential patterns and verify the exact staged file list before pushing to the configured GitHub origin. Pattern scanning cannot guarantee absence of every possible secret.
+
+## A1 — Configure project
+
+Date: 2026-09-21. Status: **BLOCKED — container build requires Docker WSL integration**. Python setup implemented and locally validated; A1 checkbox remains open. User approved Phase A work; A0 review is accepted.
+
+Assessment trace: p2 sensible API, p3 compute/API and README requirements; R01, R08, R12. This is foundation work, not fulfillment of ingestion or secured Q&A.
+
+Files: `pyproject.toml`, `uv.lock`, `src/addroit_docqa/`, `tests/test_health.py`, `.env.example`, `.gitignore`, `.dockerignore`, `Dockerfile`, README and task ledgers. Exact direct dependency pins and uv's transitive lock; Python 3.12 selected to match local runtime. uv replaces the illustrative pip commands in the plan. No downstream endpoint scaffolding.
+
+Flow: Uvicorn loads `create_app` with `--factory`; the factory registers typed public `GET /health`; it returns HTTP 200 `{"status":"ok"}` without consulting external services. Unknown routes return 404. Health proves process liveness only. Application authentication and safe error envelopes remain B1 work.
+
+Actual validation:
+
+- Re-read all four PDF pages with `uv run --no-project --with pypdf`; assessment remained local/ignored. pypdf is a temporary inspection dependency, not added to project dependencies.
+- Initial `uv add --pin ...` failed: uv does not support that flag. Corrected to `uv add --bounds exact fastapi pydantic uvicorn` and `uv add --dev --bounds exact pytest ruff httpx`; both passed.
+- `uv run --frozen ruff check .`: All checks passed.
+- `uv run --frozen ruff format --check .`: passed (initial concurrent install run reported 11 files; subsequent final check records the settled project set).
+- `uv run --frozen pytest -q`: **2 passed**, 2 dependency deprecation warnings (Starlette httpx migration and anyio BlockingPortal alias). Warnings are not suppressed; revisit when updating the test stack.
+- `uv run --frozen python -c 'from addroit_docqa.main import create_app; assert create_app().title == "Addroit Document Q&A"'`: exit 0.
+- `UV_PROJECT_ENVIRONMENT=/tmp/addroit-a1-fresh uv sync --frozen --no-editable` plus import from that environment: passed; installed 23 packages, printed `Fresh package import PASS`.
+- Temporary local subprocess smoke check started the actual Uvicorn factory on loopback port 18080, received HTTP 200 with exact health body, then terminated it: PASS.
+- `docker version` and `docker build -t addroit-docqa:local .`: both exit 1; Docker wrapper reports no Docker command available in this WSL distro and asks for Docker Desktop WSL integration. No image built or container run.
+
+Security/cost: no AWS calls, resource creation or inference. Runtime runs as UID/GID 10001 in the proposed container. Docker context is an allowlist; private assessment and environment files excluded. Access logs disabled. Health takes no secrets. Application routes do not exist yet. Pattern scan before publication is a heuristic, not a guarantee.
+
+Tradeoffs: uv lock gives repeatable Python dependency resolution with one additional development tool. Python 3.12 narrows the supported version for reproducibility (contract requires 3.11+). Base container tags are not digest-pinned and OS layers may change; Docker validation remains outstanding. Small factory isolates app creation for tests and later dependency injection.
+
+Walkthrough: Why `--factory`? It calls `create_app()` to construct the ASGI app; exec-form CMD starts Uvicorn directly so it receives shutdown signals. Does health prove Bedrock works? No: only that this process can answer HTTP requests; dependency readiness needs separate checks.
+
+Next: enable Docker Desktop integration for this WSL distro and rerun build/container smoke test to close A1. Then review A1 before A2. A2 live probes still need credential-type/model/region/owner/billing confirmation and explicit approval. A3 dimensions remain unverified. Phase A is not complete.

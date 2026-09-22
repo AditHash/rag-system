@@ -56,3 +56,11 @@ private-file exclusion and graceful-shutdown checks. Two local HTTP tests and
 lint/format checks passed again. No AWS deployment or secured Q&A is claimed.
 See the progress ledger for exact commands and the Docker Desktop Windows-client
 workaround. A2 access probes have not run.
+
+## A2 checkpoint — 2026-09-22
+
+R07/R09/R16 access evidence is **BLOCKED: LIVE-BEDROCK**. Catalog discovery via
+the CSV AWS principal works, but one minimal embedding invocation and one minimal
+generation invocation each returned `ValidationException: Operation not allowed`.
+The separate bearer API key has not been tested. No Bedrock success, model output,
+or paid result is claimed. See the A2 ledger for exact model IDs and scope.

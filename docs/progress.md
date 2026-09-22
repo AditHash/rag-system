@@ -91,3 +91,26 @@ Flow unchanged: Uvicorn factory → typed health route → `{"status":"ok"}`; un
 Files updated: README, plan, progress, traceability and decisions. No AWS calls, paid resources or inference. Docker Desktop was started and remains available; downloaded local images/build cache remain, temporary test container removed.
 
 Next: **A2**. Requested credential type, region/model IDs, account-owner authorization and billing responsibility without requesting secret values. No live-call approval inferred from the request to continue. Stop at this checkpoint pending A2 prerequisites and explicit approval for a concrete bounded live probe.
+
+## A2 — AWS/Bedrock access probe
+
+Date: 2026-09-22. Status: **BLOCKED — LIVE-BEDROCK invocation permission**.
+
+Credential path tested: AWS access key from the local CSV, account `614934752615`, principal `arn:aws:iam::614934752615:user/Aditya-test`. The separate Bedrock bearer API key was not available to this process and was not inspected.
+
+Read-only checks:
+
+- STS caller identity succeeded.
+- `bedrock.list_foundation_models` succeeded in seven regions; `us-east-1` returned 85 text-capable model summaries.
+- Catalog included `amazon.titan-embed-text-v2:0` (embedding) and `amazon.nova-micro-v1:0` (text generation).
+
+Approved bounded live checks:
+
+- `bedrock-runtime.invoke_model` with one short text and 256 requested dimensions on `amazon.titan-embed-text-v2:0`: **failed**, `ValidationException: Operation not allowed`.
+- `bedrock-runtime.invoke_model` with one short instruction and `max_new_tokens=8` on `amazon.nova-micro-v1:0`: **failed**, `ValidationException: Operation not allowed`.
+
+Only model invocation was billable-capable; both calls were denied before a model response. Response content and credentials were not logged. No resources were created. This is not evidence that the separate bearer API key works; API-key authentication was not tested.
+
+Interpretation: the AWS principal can discover the catalog but cannot invoke these models in `us-east-1`. Account owner must grant/enable model invocation and confirm model access, region, quota and billing, or provide an authorized Bedrock API key whose supported request path is confirmed. Do not substitute Groq or another provider silently and do not claim live Bedrock success.
+
+Next: obtain authorization/model access or the API key details (type only, region and model IDs; never the secret), then run a new explicitly bounded probe. A3 database work can proceed independently after candidate review; A2 remains blocked.

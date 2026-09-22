@@ -23,3 +23,12 @@ Docker uses runtime-only dependencies, non-root UID 10001 and an allowlisted bui
 context. Version-tagged base images can change; digest pinning and an actual build
 remain deployment/reproducibility considerations. Container validation is blocked
 by unavailable Docker Desktop integration in WSL; no deployment claim is made.
+
+### A1 validation follow-up — 2026-09-22
+
+Started the existing Docker Desktop installation and used `docker.exe` from WSL
+to build and validate the Linux container. This closes the local build blocker
+without changing WSL integration settings. The README documents this alternative.
+Runtime health, UID/GID, file exclusions and graceful shutdown passed; no AWS
+resources were touched. Base-image tags remain mutable, with resolved digests
+recorded in the progress ledger for this validation.

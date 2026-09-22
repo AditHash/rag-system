@@ -69,3 +69,25 @@ Tradeoffs: uv lock gives repeatable Python dependency resolution with one additi
 Walkthrough: Why `--factory`? It calls `create_app()` to construct the ASGI app; exec-form CMD starts Uvicorn directly so it receives shutdown signals. Does health prove Bedrock works? No: only that this process can answer HTTP requests; dependency readiness needs separate checks.
 
 Next: enable Docker Desktop integration for this WSL distro and rerun build/container smoke test to close A1. Then review A1 before A2. A2 live probes still need credential-type/model/region/owner/billing confirmation and explicit approval. A3 dimensions remain unverified. Phase A is not complete.
+
+### A1 validation completed — 2026-09-22
+
+Status: **PASS**, superseding the earlier Docker blocker. Assessment p3 compute/API and p3 README; R01/R08/R12 foundation only. No new API functions or cloud integrations added.
+
+Inspected Git status (only unrelated untracked `instruct.md`), source/tests, plan, ledger, Dockerfile and relevant assessment page. Initial `docker version` still failed because WSL integration was unavailable; `docker.exe version` also initially failed because Docker Desktop's Linux engine was stopped. Ran `docker.exe desktop start` successfully. The Windows client can build from this repository without changing WSL settings.
+
+Actual checks:
+
+- `uv run --frozen ruff check .`: All checks passed.
+- `uv run --frozen ruff format --check .`: 11 files already formatted.
+- `uv run --frozen pytest -q`: 2 passed, 2 known dependency warnings, 0.77s.
+- `git diff --check`: exit 0.
+- `docker.exe version`: Docker Desktop 4.85.0, Linux engine 29.6.2 reachable.
+- `docker.exe build -t addroit-docqa:local .`: exit 0; 14 runtime packages installed; image built successfully. Python base resolved to `python:3.12-slim@sha256:2f17fc044b579bab302c2e8054d3a686e2cb9a83de48e70534b94cd8ebbe06a9`; uv base resolved to `ghcr.io/astral-sh/uv:0.12.17@sha256:10787c682e4184e4f290de1171fd4703dc63de99221f10fe1c99002ce7fa9acc`.
+- `python3 /tmp/addroit-container-check.py`: three check groups passed. Started `addroit-a1-validation` with `--network none`, verified internal HTTP 200 and exact health JSON; checked UID/GID 10001, no pytest/ruff, and no `.git`, `.env`, `project-information` or `tests` under `/app`; stopped with exit 0 and removed the temporary container. This is an actual local container check, not AWS deployment or an external-client deployment smoke test.
+
+Flow unchanged: Uvicorn factory → typed health route → `{"status":"ok"}`; unknown application routes still return 404. Exec-form startup allows graceful signal handling, now checked. Health intentionally does not test cloud readiness. Runtime-only install reduces image contents; version tags still allow future base-image changes.
+
+Files updated: README, plan, progress, traceability and decisions. No AWS calls, paid resources or inference. Docker Desktop was started and remains available; downloaded local images/build cache remain, temporary test container removed.
+
+Next: **A2**. Requested credential type, region/model IDs, account-owner authorization and billing responsibility without requesting secret values. No live-call approval inferred from the request to continue. Stop at this checkpoint pending A2 prerequisites and explicit approval for a concrete bounded live probe.

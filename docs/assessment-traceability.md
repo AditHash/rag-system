@@ -47,3 +47,12 @@ its build is **BLOCKED** by missing Docker WSL integration. No deployed service,
 authenticated application routes, ingestion, retrieval or evaluation exists.
 A0's statement of no implementation is historical; mandatory product outcomes
 remain unmet. A1 is not checked off until container validation passes.
+
+## A1 gate closed — 2026-09-22
+
+**PASS**, superseding the prior container blocker. R01/R08/R12 foundation now has
+actual local container build evidence plus HTTP health, non-root runtime,
+private-file exclusion and graceful-shutdown checks. Two local HTTP tests and
+lint/format checks passed again. No AWS deployment or secured Q&A is claimed.
+See the progress ledger for exact commands and the Docker Desktop Windows-client
+workaround. A2 access probes have not run.

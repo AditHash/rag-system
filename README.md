@@ -5,7 +5,7 @@ Bedrock. These are selected design choices; see [plan.md](plan.md).
 
 Current implementation: a local FastAPI application with `GET /health` only.
 Ingestion, authentication, retrieval, grounding, database and AWS integration are
-not implemented. A1 container validation is pending working Docker access.
+not implemented. A1 local and container validation passed on 2026-09-22.
 The proposed architecture in the plan is not a deployed system.
 
 ## Local development
@@ -48,8 +48,9 @@ Tests use an in-process HTTP client and make no AWS or Bedrock calls.
 
 ## Container
 
-Requires a running Docker engine; on WSL, enable Docker Desktop integration for
-this distro first.
+Requires a running Docker engine. On WSL, enable Docker Desktop integration for
+this distro, or use the Windows client as validated here: run `docker.exe desktop
+start`, then substitute `docker.exe` for `docker` in the commands below.
 
 ```bash
 docker build -t addroit-docqa:local .
@@ -62,7 +63,8 @@ listens on port 8000 inside the container. No cloud clients start with the app.
 Access logs are disabled to avoid retaining raw query strings. The Docker build
 context allowlist excludes the assessment, Git metadata, local settings and tests.
 Base images use version tags, not immutable digests; dependency locks do not make
-OS layers immutable. No image has been deployed to AWS.
+OS layers immutable. The local image passed health, UID/GID, excluded-file, runtime-dependency and
+graceful-shutdown checks. No image has been deployed to AWS.
 
 See [progress](docs/progress.md), [traceability](docs/assessment-traceability.md),
 and [decisions](docs/decisions.md). Paid AWS resources and live Bedrock calls need

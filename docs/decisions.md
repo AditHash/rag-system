@@ -32,3 +32,14 @@ without changing WSL integration settings. The README documents this alternative
 Runtime health, UID/GID, file exclusions and graceful shutdown passed; no AWS
 resources were touched. Base-image tags remain mutable, with resolved digests
 recorded in the progress ledger for this validation.
+
+## Locked RAG model stack — 2026-09-24
+
+Embedding: Amazon Titan Text Embeddings V2 (`amazon.titan-embed-text-v2:0`), fixed at
+1,024 dimensions. Normal generation: Qwen3 32B (`qwen.qwen3-32b-v1:0`). Thinking
+generation: OpenAI GPT-OSS 20B (`openai.gpt-oss-20b-1:0`). Optional reranking:
+Cohere Rerank 3.5 (`cohere.rerank-v3-5:0`). Ordinary questions route to Qwen;
+complex or conflicting questions route to GPT-OSS. This is model routing, not a
+promise to expose hidden reasoning. Retrieval starts cosine top-10 and reranks to
+top-5. All model calls remain blocked until Bedrock invocation access is granted;
+local tests use deterministic fakes.

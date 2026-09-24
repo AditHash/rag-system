@@ -64,3 +64,10 @@ the CSV AWS principal works, but one minimal embedding invocation and one minima
 generation invocation each returned `ValidationException: Operation not allowed`.
 The separate bearer API key has not been tested. No Bedrock success, model output,
 or paid result is claimed. See the A2 ledger for exact model IDs and scope.
+
+## Model decision checkpoint — 2026-09-24
+
+Selected stack: Titan Text Embeddings V2 (1,024 dimensions), Qwen3 32B for normal
+generation, GPT-OSS 20B for routed complex questions, and Cohere Rerank 3.5 for
+optional candidate reranking. These are design selections, not live-access
+evidence; the tested account still returns `Operation not allowed` for invocation.

@@ -127,3 +127,11 @@ character boundaries, configured overlap, page/offset metadata, blank-page
 handling and repeatable document-scoped IDs. Chunk size and overlap are
 implementation starting points requiring retrieval evaluation. See
 `docs/progress.md` for tests and tradeoffs.
+
+## B5 embeddings — 2026-09-24
+
+R02 **PASS** for local adapter behavior. The Titan V2 adapter requests and
+checks 1,024 dimensions for both document and query text, with bounded throttling
+retries. Tests use a fake Bedrock client; no live call or current credential
+verification is claimed. A previous bounded model probe is recorded under A2.
+See `docs/progress.md` for exact tests and current limitations.

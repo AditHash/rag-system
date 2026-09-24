@@ -376,3 +376,41 @@ embedding work. Why deterministic IDs? Reprocessing unchanged document text and
 settings produces stable keys for safe idempotent persistence.
 
 Next: **B5 — Embedding provider**.
+
+## B5 — Bedrock embedding adapter
+
+Date: 2026-09-24. Status: **PASS** for provider logic under local fake tests;
+current live invocation was not run. Assessment trace: p1 embedding flow (R02)
+and p4 explanation of embeddings (R15); Titan V2 is the selected model.
+
+`backend/src/embedding.py` adds `BedrockEmbeddingProvider.embed_texts` and
+`embed_query`. Both use the configurable Titan model ID, request 1,024 dimensions,
+and return vectors validated for exact length, numeric values, and finiteness.
+Empty or overly long inputs fail before network access. The boto3 client uses the
+configured region and standard environment credential chain. The SDK is set to
+one total attempt; application logic retries only throttling and selected server
+errors up to three total calls with short exponential delays. Provider errors are
+sanitized and no document/query text or credentials are logged.
+
+Validation (commands run from `backend/`):
+
+- `uv run --frozen ruff check .`: passed.
+- `uv run --frozen ruff format --check .`: passed, 19 files already formatted.
+- `uv run --frozen pytest -q`: **36 passed, 1 skipped**, with two existing
+  Starlette/anyio deprecation warnings. Fakes verify model/request payload,
+  document/query consistency, empty/oversize inputs, dimension/value failures,
+  throttling retry/backoff/exhaustion, and non-retryable failure handling.
+- No live Bedrock request was made; fake tests validate adapter behavior but do
+  not re-prove current credentials, model access, region quota, or live billing.
+
+Tradeoff: Titan is the shared document/query embedding model selected for the
+1,024-dimensional schema. One invoke per text is easy to bound and explain but
+has more request latency/cost than a supported batch path. The 30,000-character
+input cap is a defensive application limit, not a token-count guarantee.
+
+Walkthrough: Why must query and document embeddings share a model/dimension? Their
+vectors must occupy the same semantic space and fit `vector(1024)` for cosine
+search. What does retry exhaustion do? It returns a sanitized provider error; it
+does not create a fake vector or silently substitute another model.
+
+Next: **B6 — Chunk persistence**.

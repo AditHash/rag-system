@@ -65,3 +65,14 @@ semantic splitting would add a tokenizer/dependency before the evaluation set
 shows it is needed. Chunk IDs are deterministic UUIDv5 values scoped to the
 document and source location/content, making retries repeatable. These defaults
 are starting points, not measured optimal settings; evaluation may change them.
+
+## B5 embeddings — 2026-09-24
+
+Use Titan Text Embeddings V2 at 1,024 dimensions for both document and query
+text. The local database schema is fixed to `vector(1024)`, and an earlier bounded
+probe verified this model returns that dimension when requested. The adapter
+checks each returned vector against the schema before handing it to persistence.
+It performs one request per text and has three total application attempts for
+throttling/server failures, with SDK retries disabled so that bound is explicit.
+This is simple and predictable but may add latency and call cost for large
+documents; batching/throughput tuning belongs after end-to-end evaluation.

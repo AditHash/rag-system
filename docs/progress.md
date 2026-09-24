@@ -114,3 +114,13 @@ Only model invocation was billable-capable; both calls were denied before a mode
 Interpretation: the AWS principal can discover the catalog but cannot invoke these models in `us-east-1`. Account owner must grant/enable model invocation and confirm model access, region, quota and billing, or provide an authorized Bedrock API key whose supported request path is confirmed. Do not substitute Groq or another provider silently and do not claim live Bedrock success.
 
 Next: obtain authorization/model access or the API key details (type only, region and model IDs; never the secret), then run a new explicitly bounded probe. A3 database work can proceed independently after candidate review; A2 remains blocked.
+
+### A2 recheck — 2026-09-24
+
+Using the same local CSV AWS credentials, account identity remained `614934752615`.
+`ListFoundationModels` succeeded with 120 model summaries in `us-east-1`; both
+`amazon.titan-embed-text-v2:0` and `amazon.nova-micro-v1:0` remain catalogued.
+One minimal invocation per model was attempted again. Embedding and generation both
+returned `ValidationException: Operation not allowed`. No model output was received,
+and no credentials or response content were logged. Status remains **BLOCKED:
+LIVE-BEDROCK**. The separate bearer API key remains untested.

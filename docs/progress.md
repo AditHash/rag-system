@@ -873,6 +873,62 @@ IDs and source assembly, and evaluation still measures factual support.
 
 Next: **C6 — Server-side citation validation and source assembly**.
 
+## C6 — Citation validation and source assembly
+
+Date: 2026-09-24. Status: **PASS** for deterministic unit contract and pgvector
+metadata integration. Assessment trace: p1 verifiable original-source citations;
+R04/R05. Citation IDs and output shape are our implementation choices; source
+traceability is required.
+
+`backend/src/citations.py:validate_citations` binds the model's source IDs to
+the exact candidate mapping supplied to the prompt. An ANSWERED response with
+no IDs, duplicate IDs, or IDs absent from the retrieved set raises
+`CitationValidationError`. A valid response produces citations using only the
+server's retrieval records: `document_id`, original filename, page, character
+offsets, and chunk excerpt. A refusal must have no cited IDs and returns an
+empty source list. C2 now selects start/end offsets from the database with the
+chunk so the output can point within the original page/file.
+
+Flow: parsed status/answer/source IDs + request-local source map → existence and
+uniqueness checks → server-assembled `VerifiedAnswer`. Model-supplied metadata
+is not part of `ParsedAnswer` and cannot override filename/page/offsets. Unknown
+or missing IDs fail closed; the later orchestrator will map that validation
+failure to a bounded refusal. Even valid source IDs only show that chunks were
+retrieved; they do not prove semantic entailment.
+
+Validation (commands run from `backend/`):
+
+- `uv run --frozen ruff check .`: passed.
+- `uv run --frozen ruff format --check .`: **38 files already formatted**.
+- `uv run --frozen pytest -q`: **105 passed, 1 skipped**, two existing
+  Starlette/anyio deprecation warnings.
+- With disposable `pgvector/pgvector:pg18` database `a3_test_c6`,
+  `A3_TEST_DATABASE_URL=... uv run --frozen pytest -q`: **106 passed**. This
+  verified retrieved page and text offsets against persisted chunk metadata.
+  Temporary container stopped and removed.
+- New unit tests cover valid multi-source output, source ordering, filename/page/
+  offset/excerpt binding, empty-source refusal, missing, duplicate and bogus IDs,
+  invalid ID types, and refusal-with-citation rejection. No AWS request or paid
+  call was made. `git diff --check`: passed.
+
+Security/cost: only the generator's opaque ID selection is trusted; citation
+metadata is rebuilt from server-owned DB results. There is no additional model
+call or inference cost.
+
+Tradeoff: ID binding prevents fabricated file/page references, but does not
+verify that an excerpt entails every answer sentence. An entailment verifier or
+bounded retry could reduce some unsupported claims but adds latency/cost and
+can still be wrong; the measured evaluation should determine if either is
+useful.
+
+Walkthrough: Can the model invent page 99 and have it returned as a citation?
+No; only source IDs are parsed, and the service looks up the page from the
+retrieved candidate. Does a valid source ID prove the sentence is true? No; it
+proves only that the cited chunk was retrieved and must be checked in evaluation
+or by a separate evidence-support method.
+
+Next: **C7 — End-to-end answer orchestrator**.
+
 ## A1 runtime command follow-up — 2026-09-24
 
 Status: **PASS** locally. The backend adds `backend/main.py` so `uv run main.py`

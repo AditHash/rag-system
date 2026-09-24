@@ -143,7 +143,8 @@ models.
 filters by authenticated owner, `READY` document state, and embedding model;
 optional document IDs further narrow the search. The default returns 10
 candidates and the hard limit is 20. Results include the original filename,
-page, chunk ordinal/text, cosine distance, and `similarity = 1 - distance`.
+page, text offsets, chunk ordinal/text, cosine distance, and
+`similarity = 1 - distance`.
 Similarity is a ranking value, not a calibrated probability that an answer is
 correct. This repository function is tested locally but is not yet connected to
 a chat route.
@@ -174,6 +175,13 @@ fail closed. The parser does not yet verify that cited IDs belong to retrieved
 evidence or prove claim support—that is the separate C6 stage. Qwen3 32B is the
 normal model and GPT-OSS 20B is available for the later thinking-mode router.
 No live generation call runs in regular tests.
+
+`backend/src/citations.py` validates every model-selected source ID against the
+server's prompt mapping. It builds each returned source from the original
+retrieval record: document ID, filename, page, offsets, and excerpt. Missing,
+duplicate, or unknown IDs fail validation; a refusal returns an empty source
+list. Valid IDs prove only that a source was retrieved, not that it logically
+supports the full answer, so semantic correctness still needs evaluation.
 
 To run the database migration check, provide an empty, disposable local database
 whose name begins with `a3_test`:

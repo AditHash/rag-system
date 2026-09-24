@@ -184,3 +184,12 @@ trying to repair it. Treat document text as untrusted instructions, but do not
 assume the prompt prevents injection. Citation ID binding and citation-source
 assembly remain server responsibilities in C6. Do not log query, evidence or
 model response.
+
+## C6 server-side citation binding — 2026-09-24
+
+Treat generated source IDs as references into the exact per-request retrieval
+candidate map. Reject ANSWERED results without at least one ID and reject any
+duplicate or unknown IDs. Build each source response from the DB-derived
+candidate: filename, page, offsets, and excerpt. Refusals carry an empty source
+list. This prevents fabricated citation metadata but does not prove that a
+source entails each claim; correctness remains an evaluation question.

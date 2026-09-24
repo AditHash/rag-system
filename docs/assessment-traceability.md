@@ -231,3 +231,12 @@ bounded; malformed responses fail closed. Tests use a fake client, with no live
 Bedrock inference. Citation-ID existence and source metadata binding remain
 C6 responsibilities; prompt instructions alone do not ensure factual support.
 See `docs/progress.md` for exact validation.
+
+## C6 citation binding — 2026-09-24
+
+R04/R05 **PASS** for server-side citation assembly. The service rejects missing,
+duplicate and unknown source IDs, then rebuilds filename, page, character offsets
+and excerpt from the exact retrieved candidates. Refusals return no sources.
+The model cannot supply or override citation metadata. Tests include multi-source
+answers and disposable pgvector metadata. Valid ID existence is not semantic
+entailment, which remains a limitation for evaluation. No AWS calls were made.

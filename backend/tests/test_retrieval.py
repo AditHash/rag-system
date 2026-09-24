@@ -36,7 +36,7 @@ def test_retrieve_candidates_returns_metadata_and_cosine_similarity() -> None:
     chunk_id = uuid4()
     document_id = uuid4()
     connection = FakeConnection(
-        [(chunk_id, document_id, "guide.pdf", 3, 4, "source excerpt", 0.125)]
+        [(chunk_id, document_id, "guide.pdf", 3, 30, 45, 4, "source excerpt", 0.125)]
     )
     query = [0.0] * BEDROCK_EMBEDDING_DIMENSIONS
 
@@ -47,6 +47,8 @@ def test_retrieve_candidates_returns_metadata_and_cosine_similarity() -> None:
     assert results[0].document_id == document_id
     assert results[0].original_filename == "guide.pdf"
     assert results[0].page_number == 3
+    assert results[0].start_offset == 30
+    assert results[0].end_offset == 45
     assert results[0].ordinal == 4
     assert results[0].content == "source excerpt"
     assert results[0].cosine_distance == 0.125

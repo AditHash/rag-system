@@ -259,6 +259,8 @@ def _check_retrieval(
     assert candidates[0].document_id == ready_document_id
     assert candidates[0].original_filename == "sample.txt"
     assert candidates[0].page_number == 1
+    assert candidates[0].start_offset == 0
+    assert candidates[0].end_offset == 4
     assert candidates[0].cosine_distance == pytest.approx(0.0)
     assert candidates[0].similarity == pytest.approx(1.0)
     assert candidates[1].cosine_distance == pytest.approx(1.0)

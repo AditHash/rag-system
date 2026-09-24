@@ -23,6 +23,8 @@ class RetrievalCandidate:
     content: str
     cosine_distance: float
     similarity: float
+    start_offset: int | None = None
+    end_offset: int | None = None
 
 
 def retrieve_candidates(
@@ -49,7 +51,8 @@ def retrieve_candidates(
     rows = connection.execute(
         f"""
         SELECT chunk.id, document.id, document.original_filename,
-               chunk.page_number, chunk.ordinal, chunk.content,
+               chunk.page_number, chunk.start_offset, chunk.end_offset,
+               chunk.ordinal, chunk.content,
                (chunk.embedding <=> %s::vector) AS cosine_distance
         FROM chunks AS chunk
         JOIN documents AS document ON document.id = chunk.document_id
@@ -65,7 +68,17 @@ def retrieve_candidates(
 
     candidates = []
     for row in rows:
-        chunk_id, document_id, filename, page_number, ordinal, content, raw_distance = row
+        (
+            chunk_id,
+            document_id,
+            filename,
+            page_number,
+            start_offset,
+            end_offset,
+            ordinal,
+            content,
+            raw_distance,
+        ) = row
         distance = float(raw_distance)
         candidates.append(
             RetrievalCandidate(
@@ -73,6 +86,8 @@ def retrieve_candidates(
                 document_id=document_id,
                 original_filename=filename,
                 page_number=page_number,
+                start_offset=start_offset,
+                end_offset=end_offset,
                 ordinal=ordinal,
                 content=content,
                 cosine_distance=distance,

@@ -260,3 +260,14 @@ an empty source list. Error responses are sanitized. HTTP tests use injected
 fakes; they do not verify live Bedrock, S3, PostgreSQL deployment, or inference
 billing. The API key still identifies one demo principal. Cloud deployment and
 fresh-client end-to-end checks remain outstanding.
+
+## D1 evaluation corpus — 2026-09-24
+
+`eval/questions.jsonl` contains 15 draft cases with expected answers,
+answerability labels, scenario tags and stable logical evidence IDs.
+`eval/evidence.json` maps IDs to exact spans in tracked documentation; runtime
+chunk UUIDs are not fabricated or hard-coded. One clearly labeled synthetic
+source pair supplies the conflicting-evidence case. Corpus integrity is checked
+locally. Candidate review and representative customer-document coverage remain
+pending, so this is not yet accepted as assessment ground truth and no model
+quality metrics are claimed.

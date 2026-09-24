@@ -164,8 +164,8 @@ candidates and the hard limit is 20. Results include the original filename,
 page, text offsets, chunk ordinal/text, cosine distance, and
 `similarity = 1 - distance`.
 Similarity is a ranking value, not a calibrated probability that an answer is
-correct. This repository function is tested locally but is not yet connected to
-a chat route.
+correct. The authenticated chat route calls this retrieval function before the
+evidence gate and answer generation.
 
 `backend/src/evidence.py` provides the pre-generation gate. It refuses when no
 candidate exists or when every cosine similarity is below
@@ -189,9 +189,8 @@ The prompt tells the model that documents are untrusted data and forbids
 outside knowledge, invented source IDs, metadata, or hidden reasoning. The
 Bedrock Converse adapter bounds output to 1,024 tokens and parses exactly
 `status`, `answer`, and `cited_source_ids`; malformed JSON or upstream errors
-fail closed. The parser does not yet verify that cited IDs belong to retrieved
-evidence; the separate C6 validator now binds those IDs to trusted retrieval
-records. Citation validity still does not prove claim support. Qwen3 32B is the
+fail closed. The C6 validator binds cited IDs to trusted retrieval records.
+Citation validity still does not prove claim support. Qwen3 32B is the
 normal model and GPT-OSS 20B is used when the caller selects thinking mode. No
 live generation call runs in regular tests.
 
@@ -206,9 +205,9 @@ supports the full answer, so semantic correctness still needs evaluation.
 the evidence gate, optional reranking, generation, and citation validation.
 Empty/weak evidence returns `INSUFFICIENT_CONTEXT` before the reranker or
 generator is called. `thinking_mode=false` selects Qwen3 32B; `true` selects
-GPT-OSS 20B. The service returns a fixed safe refusal if citation IDs fail
-validation. The HTTP chat endpoint will be added separately; unit tests inject
-fake providers and make no Bedrock calls.
+GPT-OSS 20B. The mounted authenticated HTTP chat endpoint returns a fixed safe
+refusal if citation IDs fail validation. Unit tests inject fake providers and
+make no Bedrock calls.
 
 To run the database migration check, provide an empty, disposable local database
 whose name begins with `a3_test`:

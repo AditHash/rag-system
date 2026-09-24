@@ -1054,6 +1054,53 @@ includes private reasoning.
 Next: **D1 — Human-reviewed evaluation corpus (10–15 cases)**. No AWS
 deployment or live paid model call was made.
 
+## D1 — Evaluation corpus draft
+
+Date: 2026-09-24. Status: **DRAFT — candidate review pending**. Assessment
+trace: p2 small ground-truth evaluation; R05/R06/R17. The corpus has 15 cases
+with supported answers, paraphrases, two questions outside the available
+documents, and one deliberate conflict pair. Most cases cite current README or
+decision-record text. The conflict pair is explicitly synthetic test data; no
+private assessment or customer documents were copied.
+
+`eval/questions.jsonl` stores expected responses, answerability, tags and stable
+logical evidence IDs. `eval/evidence.json` maps each ID to an exact source text
+anchor; IDs are not runtime chunk UUIDs, which are created at ingestion time.
+The candidate has not reviewed these cases, so this is not yet the required
+human-reviewed ground truth. No retrieval, answer-quality, refusal or latency
+metrics have been measured; no model calls were made.
+
+Validation:
+
+- Re-read assessment PDF p2: it requests 10–15 question/expected-answer pairs
+  and measurement against ground truth.
+- `uv run --frozen pytest -q tests/test_evaluation_corpus.py`: **2 passed**;
+  checks corpus count, unique IDs, required case types, answerability/evidence
+  consistency, and that every quoted evidence anchor exists in its tracked
+  source. The first run exposed line-wrapped anchors; the test now normalizes
+  whitespace before checking those exact source phrases.
+- `uv run --frozen ruff check .`: passed. The initial run caught one line-length
+  issue in the new test, which was formatted and rechecked.
+- `uv run --frozen ruff format --check .`: **42 files already formatted**.
+- `uv run --frozen pytest -q`: **121 passed, 1 skipped**, with two existing
+  Starlette/anyio deprecation warnings. The skipped check needs the explicit
+  disposable `A3_TEST_DATABASE_URL`.
+- No AWS resources or Bedrock inference were used.
+
+Tradeoff: the set exercises questions about repository documentation without
+publishing private assessment/customer content. The two synthetic conflict
+notes test conflict handling only; they do not replace a human-reviewed corpus
+from representative user documents. Candidate review is needed before D2
+results count as assessment metrics.
+
+User steering: keep the current small character chunker unchanged while the
+candidate awaits permission to use LangChain's text splitters. Revisit only
+after the candidate reports that permission; no dependency or chunker rewrite
+is part of this task.
+
+Next: implement D2's local evaluation runner without claiming real model
+results. D1 remains pending human review.
+
 ## A1 runtime command follow-up — 2026-09-24
 
 Status: **PASS** locally. The backend adds `backend/main.py` so `uv run main.py`

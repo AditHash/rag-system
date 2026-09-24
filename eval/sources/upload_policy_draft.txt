@@ -1,0 +1,6 @@
+ARCHIVED EVALUATION FIXTURE — DRAFT
+
+Draft policy: the maximum upload size is 5 MiB.
+
+This intentionally conflicts with upload_policy_release.txt. These two short
+files are synthetic test fixtures, not production policy or customer documents.

@@ -182,3 +182,12 @@ cross-owner IDs both return 404. Tests cover every job status and verify owner
 isolation against disposable local pgvector. Status persists across API process
 restarts, but B8 in-process task execution is not durable. No live AWS calls or
 resources were used. See `docs/progress.md` for exact test evidence.
+
+## C1 query embedding — 2026-09-24
+
+R02 **PASS** for local embedding boundary behavior. The retrieval helper rejects
+empty questions and mismatched configured model IDs before provider calls, then
+validates the 1,024-value finite vector returned by the injected provider. Unit
+tests use a fake; no Bedrock inference was made for this increment. Model and
+dimension are selected design choices recorded separately. See
+`docs/progress.md` for exact tests and limitations.

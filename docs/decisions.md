@@ -129,3 +129,12 @@ revealing job existence. Report persisted completed/total document counts rather
 than a made-up percentage. Status is durable because PostgreSQL stores it; the
 current background execution is not durable, so a restart can leave a persisted
 job in `PROCESSING` until recovery is implemented.
+
+## C1 query embedding — 2026-09-24
+
+Use the same Titan V2 model ID and 1,024 dimensions as the indexed chunks.
+Before retrieval, reject blank queries and compare the provider's model ID with
+the indexed model setting. Validate returned shape and finite numeric values
+even when a provider adapter already checks them; this keeps the retrieval
+boundary safe for injected providers and tests. A future model change requires
+re-embedding/migration or an explicit model-partitioned retrieval path.

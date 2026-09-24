@@ -607,6 +607,49 @@ remains `PROCESSING`.
 
 Next: **C1 — Retrieval repository and owner-scoped cosine search**.
 
+## C1 — Query embedding boundary
+
+Date: 2026-09-24. Status: **PASS** for deterministic local validation.
+Assessment trace: p1 question-to-vector retrieval flow; R02. Titan V2 and
+1,024 dimensions are selected model/schema choices; the assessment requires
+retrieval, not this provider or dimension.
+
+`backend/src/query_embedding.py:embed_query` receives question text, an
+embedding provider, and the model ID used for indexed documents. It rejects
+blank input before any provider call, fails if query and indexed model IDs
+differ, calls the provider's same-model query method, then verifies the
+1,024-value numeric finite vector. It returns the checked vector for C2 cosine
+search. Provider errors propagate to the caller; no substitute model or dummy
+vector is created. `backend/src/embedding.py` already implemented the Bedrock
+adapter's query method; this increment adds the explicit retrieval boundary and
+its contract checks.
+
+Validation (commands run from `backend/`):
+
+- `uv run --frozen ruff check .`: passed.
+- `uv run --frozen ruff format --check .`: 28 files already formatted.
+- `uv run --frozen pytest -q`: **55 passed, 1 skipped**, two existing
+  Starlette/anyio deprecation warnings.
+- New tests cover matching-model happy path, empty text, model mismatch before
+  provider invocation, and invalid vector dimension. All use a fake; no Bedrock
+  inference or AWS call was made. `git diff --check`: passed.
+
+Security/cost: no question is logged or sent during unit tests; no cost-bearing
+service is contacted. A wrong model configuration fails before inference.
+
+Tradeoff: checking the configured/indexed model ID prevents semantically
+incompatible vector comparison, and dimension/finite validation protects the
+database operator. This adds a small validation layer in front of the provider;
+the fixed model ID is still configuration-level evidence, while C2 must ensure
+retrieved documents use that indexed model.
+
+Walkthrough: Why must query and document vectors use the same model? Equal
+dimensions alone do not mean their coordinates represent the same semantic
+space. What does a model mismatch do? It fails before a Bedrock request instead
+of returning an untrustworthy similarity ranking.
+
+Next: **C2 — Owner-scoped pgvector cosine retrieval**.
+
 ## A1 runtime command follow-up — 2026-09-24
 
 Status: **PASS** locally. The backend adds `backend/main.py` so `uv run main.py`

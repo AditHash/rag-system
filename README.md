@@ -130,6 +130,13 @@ same model and fixed 1,024 dimensions for document and query embeddings, validat
 each response before returning it, and retries throttling at most twice after
 the initial attempt. A live embedding request is not part of local tests.
 
+`backend/src/query_embedding.py` is the retrieval boundary: it checks that the
+query model ID matches the indexed model and that the query vector has 1,024
+finite numeric values before passing it to similarity search. Query text must
+not be empty. Retrieval supplies the expected indexed model ID; a mismatch is a
+configuration error, not a reason to silently compare vectors from different
+models.
+
 To run the database migration check, provide an empty, disposable local database
 whose name begins with `a3_test`:
 

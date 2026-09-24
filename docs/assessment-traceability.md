@@ -250,3 +250,13 @@ explicit GPT-OSS thinking mode, then validates and assembles source IDs. Invalid
 citations become a bounded refusal; provider/DB failures remain service errors.
 No live model or DB call was made in these unit-flow tests. The HTTP chat route
 is still pending.
+
+## C8 authenticated chat API — 2026-09-24
+
+R03/R04/R05/R08 **PASS** for the local FastAPI contract. `POST /api/v1/chat`
+requires the API key, validates question/document scope/top-k/model mode, and
+returns `ANSWERED` with server-assembled sources or `INSUFFICIENT_CONTEXT` with
+an empty source list. Error responses are sanitized. HTTP tests use injected
+fakes; they do not verify live Bedrock, S3, PostgreSQL deployment, or inference
+billing. The API key still identifies one demo principal. Cloud deployment and
+fresh-client end-to-end checks remain outstanding.

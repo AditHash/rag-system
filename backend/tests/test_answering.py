@@ -1,5 +1,6 @@
 """Answer orchestration tests use deterministic providers and candidates."""
 
+from contextlib import contextmanager, nullcontext
 from uuid import uuid4
 
 import pytest
@@ -69,6 +70,10 @@ def _candidate(filename: str, similarity: float = 0.9) -> RetrievalCandidate:
     )
 
 
+def _connection_factory():
+    return nullcontext(object())
+
+
 def _mock_retrieval(monkeypatch, candidates):
     calls: list[dict[str, object]] = []
 
@@ -95,7 +100,7 @@ def test_weak_evidence_returns_refusal_without_rerank_or_generation(monkeypatch)
     reranker = FakeReranker([0])
 
     result = answer_question(
-        None,  # type: ignore[arg-type]
+        _connection_factory,
         "  unsupported question  ",
         "owner-a",
         embedding,
@@ -118,7 +123,7 @@ def test_empty_corpus_returns_refusal_without_generation(monkeypatch) -> None:
     generator = FakeGenerator()
 
     result = answer_question(
-        None,  # type: ignore[arg-type]
+        _connection_factory,
         "general knowledge question",
         "owner-a",
         FakeEmbeddingProvider(),
@@ -139,7 +144,7 @@ def test_answer_flow_reranks_and_binds_sources_to_post_rerank_order(monkeypatch)
     reranker = FakeReranker([1, 0])
 
     result = answer_question(
-        None,  # type: ignore[arg-type]
+        _connection_factory,
         "What do the documents say?",
         "owner-a",
         FakeEmbeddingProvider(),
@@ -165,7 +170,7 @@ def test_thinking_mode_selects_gpt_oss_without_exposing_reasoning(monkeypatch) -
     monkeypatch.setattr("src.answering.BEDROCK_THINKING_MODEL_ID", "gpt-oss-test")
 
     result = answer_question(
-        None,  # type: ignore[arg-type]
+        _connection_factory,
         "Compare these two policies.",
         "owner-a",
         FakeEmbeddingProvider(),
@@ -186,7 +191,7 @@ def test_reranker_failure_uses_original_order_and_continues(monkeypatch) -> None
     reranker = FakeReranker(fail=True)
 
     result = answer_question(
-        None,  # type: ignore[arg-type]
+        _connection_factory,
         "question",
         "owner-a",
         FakeEmbeddingProvider(),
@@ -204,7 +209,7 @@ def test_invalid_model_citations_become_safe_refusal(monkeypatch) -> None:
     generator = FakeGenerator(ParsedAnswer("ANSWERED", "Unsupported answer.", ["S999"]))
 
     result = answer_question(
-        None,  # type: ignore[arg-type]
+        _connection_factory,
         "question",
         "owner-a",
         FakeEmbeddingProvider(),
@@ -223,9 +228,47 @@ def test_generator_errors_propagate_for_service_layer_mapping(monkeypatch) -> No
 
     with pytest.raises(GenerationError, match="generation failed"):
         answer_question(
-            None,  # type: ignore[arg-type]
+            _connection_factory,
             "question",
             "owner-a",
             FakeEmbeddingProvider(),
             generator,
         )
+
+
+def test_db_connection_is_open_only_for_retrieval(monkeypatch) -> None:
+    events: list[str] = []
+    candidate = _candidate("source.txt")
+
+    def embed(_question, _provider, _model_id):
+        events.append("embed")
+        return [0.0] * 1024
+
+    def retrieve(_connection, *_args, **_kwargs):
+        events.append("retrieve")
+        return [candidate]
+
+    @contextmanager
+    def connection_factory():
+        events.append("db_open")
+        yield object()
+        events.append("db_close")
+
+    class OrderedGenerator(FakeGenerator):
+        def generate(self, question, candidates, model_id):
+            events.append("generate")
+            return super().generate(question, candidates, model_id)
+
+    monkeypatch.setattr("src.answering.BEDROCK_EMBEDDING_MODEL_ID", "embedding-test")
+    monkeypatch.setattr("src.answering.embed_query", embed)
+    monkeypatch.setattr("src.answering.retrieve_candidates", retrieve)
+
+    answer_question(
+        connection_factory,
+        "question",
+        "owner-a",
+        FakeEmbeddingProvider(),
+        OrderedGenerator(),
+    )
+
+    assert events == ["embed", "db_open", "retrieve", "db_close", "generate"]

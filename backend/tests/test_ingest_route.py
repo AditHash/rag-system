@@ -15,7 +15,9 @@ from src.routes import (
     MAX_INGEST_REQUEST_BYTES,
     IngestionDependencies,
     IngestRequestLimitMiddleware,
+    StatusDependencies,
     get_ingestion_dependencies,
+    get_status_dependencies,
 )
 
 
@@ -55,6 +57,9 @@ def _configure_app(monkeypatch, store: FakeUploadStore):
         connection_factory=lambda: nullcontext(object()),
     )
     app.dependency_overrides[get_ingestion_dependencies] = lambda: dependencies
+    app.dependency_overrides[get_status_dependencies] = lambda: StatusDependencies(
+        connection_factory=dependencies.connection_factory
+    )
 
     def create_job_stub(_connection, **kwargs):
         job_calls.append(kwargs)
@@ -282,3 +287,18 @@ def test_status_endpoint_sanitizes_database_failure(monkeypatch) -> None:
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "service_unavailable"
     assert "private details" not in response.text
+
+
+def test_status_lookup_does_not_require_s3_or_bedrock_configuration(monkeypatch) -> None:
+    monkeypatch.setenv("API_KEY", "test-key")
+    monkeypatch.setattr("src.routes.connect_database", lambda: nullcontext(object()))
+    monkeypatch.setattr("src.routes.get_job_status", lambda *_args: None)
+    app = create_app()
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/api/v1/ingest/d7144f3e-cc2c-47eb-9c58-4119d0dfecf2/status",
+            headers={"X-API-Key": "test-key"},
+        )
+
+    assert response.status_code == 404

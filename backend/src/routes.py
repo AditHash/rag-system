@@ -10,12 +10,16 @@ from uuid import UUID, uuid4
 import psycopg
 from botocore.exceptions import BotoCoreError
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Request, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from src.answering import AnswerOutcome, answer_question
 from src.auth import verify_api_key
+from src.citations import VerifiedSource
+from src.config import ENABLE_RERANKER
 from src.db import connect_database
-from src.embedding import BedrockEmbeddingProvider
+from src.embedding import BedrockEmbeddingProvider, EmbeddingProviderError
+from src.generation import BedrockGenerator, GenerationError
 from src.ingestion import (
     DocumentStore,
     EmbeddingProvider,
@@ -24,6 +28,8 @@ from src.ingestion import (
     process_job,
 )
 from src.job_repository import get_job_status
+from src.query_embedding import QueryEmbeddingProvider
+from src.reranking import BedrockReranker, Reranker
 from src.storage import S3DocumentStore
 from src.validation import MAX_UPLOAD_BYTES, validate_upload
 
@@ -48,6 +54,11 @@ class IngestionDependencies:
     connection_factory: Callable[[], psycopg.Connection]
 
 
+@dataclass(frozen=True)
+class StatusDependencies:
+    connection_factory: Callable[[], psycopg.Connection]
+
+
 class IngestAcceptedResponse(BaseModel):
     ingestion_id: UUID
     document_ids: list[UUID]
@@ -66,6 +77,54 @@ class IngestionStatusResponse(BaseModel):
     stage: str
     progress: IngestionProgress
     error: str | None
+
+
+@dataclass(frozen=True)
+class ChatDependencies:
+    embedder: QueryEmbeddingProvider
+    generator: BedrockGenerator
+    reranker: Reranker | None
+    connection_factory: Callable[[], psycopg.Connection]
+
+
+class ChatRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    question: str = Field(min_length=1, max_length=4_000)
+    document_ids: list[UUID] | None = Field(default=None, max_length=100)
+    top_k: int = Field(default=10, ge=1, le=20)
+    thinking_mode: bool = False
+
+    @field_validator("question")
+    @classmethod
+    def normalize_question(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("question must not be empty")
+        return normalized
+
+    @field_validator("document_ids")
+    @classmethod
+    def reject_duplicate_document_ids(cls, value: list[UUID] | None) -> list[UUID] | None:
+        if value is not None and len(value) != len(set(value)):
+            raise ValueError("document_ids must not contain duplicates")
+        return value
+
+
+class ChatSourceResponse(BaseModel):
+    source_id: str
+    document_id: UUID
+    filename: str
+    page_number: int | None
+    start_offset: int | None
+    end_offset: int | None
+    excerpt: str
+
+
+class ChatResponse(BaseModel):
+    status: Literal["ANSWERED", "INSUFFICIENT_CONTEXT"]
+    answer: str
+    sources: list[ChatSourceResponse]
 
 
 class RequestBodyTooLarge(Exception):
@@ -148,7 +207,10 @@ async def _send_error(send: Send, status_code: int, code: str, message: str) -> 
     await send({"type": "http.response.body", "body": body})
 
 
-def get_ingestion_dependencies(request: Request) -> IngestionDependencies:
+def get_ingestion_dependencies(
+    request: Request,
+    _owner_id: Annotated[str, Depends(verify_api_key)],
+) -> IngestionDependencies:
     """Create and reuse cloud clients lazily, after an ingestion request arrives."""
     dependencies = getattr(request.app.state, "ingestion_dependencies", None)
     if dependencies is not None:
@@ -164,6 +226,39 @@ def get_ingestion_dependencies(request: Request) -> IngestionDependencies:
             status_code=503, detail="Ingestion services are not configured"
         ) from None
     request.app.state.ingestion_dependencies = dependencies
+    return dependencies
+
+
+def get_chat_dependencies(
+    request: Request,
+    _owner_id: Annotated[str, Depends(verify_api_key)],
+) -> ChatDependencies:
+    """Create and cache query/generation clients only when chat is requested."""
+    dependencies = getattr(request.app.state, "chat_dependencies", None)
+    if dependencies is not None:
+        return dependencies
+    try:
+        dependencies = ChatDependencies(
+            embedder=BedrockEmbeddingProvider(),
+            generator=BedrockGenerator(),
+            reranker=BedrockReranker() if ENABLE_RERANKER else None,
+            connection_factory=connect_database,
+        )
+    except (BotoCoreError, ValueError):
+        raise HTTPException(status_code=503, detail="Chat services are not configured") from None
+    request.app.state.chat_dependencies = dependencies
+    return dependencies
+
+
+def get_status_dependencies(
+    request: Request,
+    _owner_id: Annotated[str, Depends(verify_api_key)],
+) -> StatusDependencies:
+    """Provide only PostgreSQL for status reads; do not initialize model/S3 clients."""
+    dependencies = getattr(request.app.state, "status_dependencies", None)
+    if dependencies is None:
+        dependencies = StatusDependencies(connection_factory=connect_database)
+        request.app.state.status_dependencies = dependencies
     return dependencies
 
 
@@ -242,7 +337,7 @@ def ingest_document(
 def read_ingestion_status(
     ingestion_id: UUID,
     owner_id: Annotated[str, Depends(verify_api_key)],
-    dependencies: Annotated[IngestionDependencies, Depends(get_ingestion_dependencies)],
+    dependencies: Annotated[StatusDependencies, Depends(get_status_dependencies)],
 ) -> IngestionStatusResponse:
     """Return status only when the job belongs to the authenticated owner."""
     try:
@@ -265,6 +360,40 @@ def read_ingestion_status(
     )
 
 
+@router.post(
+    "/api/v1/chat",
+    response_model=ChatResponse,
+    tags=["chat"],
+)
+def chat(
+    request: ChatRequest,
+    owner_id: Annotated[str, Depends(verify_api_key)],
+    dependencies: Annotated[ChatDependencies, Depends(get_chat_dependencies)],
+) -> ChatResponse:
+    """Return a grounded answer or a bounded insufficient-context refusal."""
+    try:
+        outcome: AnswerOutcome = answer_question(
+            dependencies.connection_factory,
+            request.question,
+            owner_id,
+            dependencies.embedder,
+            dependencies.generator,
+            reranker=dependencies.reranker,
+            document_ids=request.document_ids,
+            top_k=request.top_k,
+            thinking_mode=request.thinking_mode,
+        )
+    except (psycopg.Error, EmbeddingProviderError, GenerationError, ValueError):
+        raise HTTPException(
+            status_code=503, detail="Chat service is temporarily unavailable"
+        ) from None
+    return ChatResponse(
+        status=outcome.status,
+        answer=outcome.answer,
+        sources=[_chat_source(source) for source in outcome.sources],
+    )
+
+
 def _safe_filename(filename: str | None) -> str:
     if not filename:
         raise HTTPException(status_code=422, detail="A filename is required")
@@ -272,3 +401,15 @@ def _safe_filename(filename: str | None) -> str:
     if not normalized or len(normalized) > 255:
         raise HTTPException(status_code=422, detail="Filename is invalid")
     return normalized
+
+
+def _chat_source(source: VerifiedSource) -> ChatSourceResponse:
+    return ChatSourceResponse(
+        source_id=source.source_id,
+        document_id=source.document_id,
+        filename=source.filename,
+        page_number=source.page_number,
+        start_offset=source.start_offset,
+        end_offset=source.end_offset,
+        excerpt=source.excerpt,
+    )

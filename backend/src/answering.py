@@ -1,6 +1,6 @@
 """Coordinate embedding, scoped retrieval, evidence gating, and generation."""
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Literal, Protocol
 from uuid import UUID
@@ -47,7 +47,7 @@ class AnswerOutcome:
 
 
 def answer_question(
-    connection: psycopg.Connection,
+    connection_factory: Callable[[], psycopg.Connection],
     question: str,
     owner_id: str,
     embedding_provider: QueryEmbeddingProvider,
@@ -66,14 +66,15 @@ def answer_question(
         raise ValueError("question is too long")
 
     query_vector = embed_query(question, embedding_provider, BEDROCK_EMBEDDING_MODEL_ID)
-    retrieved = retrieve_candidates(
-        connection,
-        owner_id,
-        query_vector,
-        BEDROCK_EMBEDDING_MODEL_ID,
-        top_k=top_k,
-        document_ids=document_ids,
-    )
+    with connection_factory() as connection:
+        retrieved = retrieve_candidates(
+            connection,
+            owner_id,
+            query_vector,
+            BEDROCK_EMBEDDING_MODEL_ID,
+            top_k=top_k,
+            document_ids=document_ids,
+        )
     evidence = assess_evidence(retrieved, min_evidence_similarity)
     if evidence.status == "INSUFFICIENT_CONTEXT":
         return AnswerOutcome(

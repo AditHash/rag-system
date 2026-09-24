@@ -17,6 +17,7 @@ def test_model_ids_can_be_overridden_by_environment() -> None:
             "BEDROCK_RERANKER_MODEL_ID": "reranker-test",
             "BEDROCK_RERANKER_REGION": "reranker-region-test",
             "EVIDENCE_MIN_COSINE_SIMILARITY": "0.72",
+            "ENABLE_RERANKER": "true",
         },
     ):
         reload(config)
@@ -26,5 +27,6 @@ def test_model_ids_can_be_overridden_by_environment() -> None:
         assert config.BEDROCK_RERANKER_MODEL_ID == "reranker-test"
         assert config.BEDROCK_RERANKER_REGION == "reranker-region-test"
         assert config.EVIDENCE_MIN_COSINE_SIMILARITY == 0.72
+        assert config.ENABLE_RERANKER is True
 
     reload(config)

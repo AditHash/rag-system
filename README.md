@@ -11,8 +11,8 @@ ingestion endpoint. It stores the upload in S3, creates a PostgreSQL job, and
 returns `202 PENDING` before background extraction, chunking, embedding, and
 index persistence run. An authenticated status endpoint reports persisted job
 state and document IDs. Retrieval, grounded answer generation, and cloud
-answer orchestration are implemented as local service functions. The authenticated
-chat HTTP route and cloud deployment remain to be implemented.
+answer orchestration are implemented as local service functions and the
+authenticated chat route is mounted. Cloud deployment remains to be implemented.
 
 ## Local development
 
@@ -68,7 +68,7 @@ the job was accepted, not completed. This in-process task can be interrupted by
 a restart and is not durable queue delivery. A real ingestion needs a configured
 `S3_BUCKET`, `DATABASE_URL`, AWS credentials/role, and Bedrock access; local
 endpoint tests replace those providers with fakes. Question input is capped at
-4,000 characters for the planned chat endpoint.
+4,000 characters for the chat endpoint.
 
 Poll the job with the returned `ingestion_id`:
 
@@ -82,6 +82,23 @@ The status response includes `status`, current `stage`, completed/total document
 counts, document IDs and a sanitized error when the job fails. Unknown and
 other-owner IDs both return 404. In this demo, the single API key represents one
 principal.
+
+Ask a question after at least one document reaches `READY`:
+
+```bash
+curl --fail --silent --show-error \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"question":"What does the document say?","top_k":10,"thinking_mode":false}' \
+  http://127.0.0.1:8000/api/v1/chat
+```
+
+The optional `document_ids` array limits retrieval to documents owned by the
+authenticated principal. `top_k` must be 1–20. `thinking_mode=true` selects
+GPT-OSS 20B; normal mode selects Qwen3 32B. Chat needs a configured database and
+Bedrock access and can incur inference charges. `ENABLE_RERANKER` defaults to
+`false`; enabling it adds another model call, so keep it disabled until the
+evaluation demonstrates a retrieval-quality benefit.
 
 Bedrock model IDs are set in `backend/src/config.py` and can be overridden with
 `BEDROCK_EMBEDDING_MODEL_ID`, `BEDROCK_CHAT_MODEL_ID`,

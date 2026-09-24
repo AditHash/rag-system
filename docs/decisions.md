@@ -204,3 +204,14 @@ costs. Preserve vector order and omit scores if reranking fails. Use an explicit
 not output hidden reasoning. If generated citation IDs fail validation, return
 a fixed refusal with no sources; keep upstream failures distinguishable from
 ordinary unsupported questions.
+
+## C8 chat HTTP contract — 2026-09-24
+
+Expose the orchestrator at authenticated `POST /api/v1/chat`. Keep request
+inputs bounded: 4,000-character question, up to 100 unique document IDs, and
+top-k 1–20. Add `thinking_mode` as an optional boolean because the selected
+normal/thinking model choice is a user-visible capability. Return only status,
+answer and verified sources; keep retrieval scores/model diagnostics internal.
+Default `ENABLE_RERANKER` to false so an extra per-request model cost is
+explicitly opted into. Require authentication before constructing lazy cloud
+clients, and use a DB-only dependency for status lookups.

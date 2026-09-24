@@ -982,6 +982,78 @@ C6 rejects the ID and C7 returns a bounded refusal with no source metadata.
 
 Next: **C8 — Authenticated `POST /api/v1/chat` API contract**.
 
+## C8 — Authenticated chat endpoint
+
+Date: 2026-09-24. Status: **PASS** for the local HTTP contract with injected
+fake providers. Assessment trace: p1 complete callable Q&A/refusal API and p2
+authenticated, validated service; R03/R04/R05/R08. Route framework and the
+optional `thinking_mode` selector are implementation choices.
+
+`POST /api/v1/chat` requires `X-API-Key`. Its Pydantic request accepts a
+nonblank question up to 4,000 characters, at most 100 unique optional document
+UUIDs, `top_k` from 1 to 20, and optional `thinking_mode` (default false). The
+response exposes only `status`, `answer`, and verified `sources` with server
+bound source/document IDs, filename, page, offsets and excerpt. Retrieval counts,
+similarity scores and model internals are not public response fields. A valid
+request returns HTTP 200 for either `ANSWERED` or `INSUFFICIENT_CONTEXT`; invalid
+input is 422, auth failures are 401 (or 503 if the server has no API key), and
+database/model service failures are sanitized 503 responses.
+
+The chat dependency initializes embedding/generation clients lazily after API
+authentication. `ENABLE_RERANKER=false` is the default; enabling it adds the
+optional Cohere call in its configured region. Status lookups use a database-only
+dependency, so they do not require S3/Bedrock configuration. During answer flow,
+the embedding request happens before a short connection scope that runs only
+the retrieval query; the connection is closed before reranking/generation.
+
+The first OpenAPI-suite rerun after adding chat failed because the old health test
+still expected `/api/v1/chat` to be 404. Its observed 503 also exposed that
+cloud-client initialization could happen before authentication. I updated the
+test for the mounted route, made auth a prerequisite of lazy client dependencies,
+and separated the status DB dependency; the corrected suite passes.
+
+Validation (commands run from `backend/`):
+
+- `uv run --frozen ruff check .`: passed.
+- `uv run --frozen ruff format --check .`: **41 files already formatted**.
+- `uv run --frozen pytest -q`: **119 passed, 1 skipped**, two existing
+  Starlette/anyio deprecation warnings.
+- HTTP tests cover auth, question/top-k/document validation, duplicate IDs,
+  explicit normal/thinking mode propagation, verified source serialization,
+  empty-context response, safe DB error mapping, and OpenAPI. A status-route test
+  verifies lookup works without S3 or Bedrock setup. Service/provider calls are
+  mocked; no AWS requests, resources, or model inference occurred.
+- `docker.exe build -t enterprise-rag:local .` from `backend/`: passed; installed
+  24 locked runtime packages using `uv sync --no-install-project` and launched
+  through `uv run main.py`. Ran the image with `--network none`; an in-container
+  HTTP smoke check returned `{"status":"ok"}` and OpenAPI listed `/health`,
+  `/api/v1/ingest`, `/api/v1/ingest/{ingestion_id}/status`, and `/api/v1/chat`.
+  The temporary container was stopped and removed. The first host-side curl
+  attempt could not reach a `--network none` container, so the successful check
+  ran from inside it. No AWS services were available or called.
+- `git diff --check`: passed.
+
+Security/cost: all chat and status lookups use the authenticated demo principal;
+document IDs are additional narrowing filters and cannot widen owner scope. The
+API key still represents one demo principal, not production identity management.
+Inference may incur charges when a user sends a supported question; unsupported
+questions stop before model calls. The default keeps reranking off.
+
+Tradeoff: the request schema keeps control visible (`top_k`, document scope and
+thinking model toggle) without exposing retrieval diagnostics. Qwen is the
+default low-complexity path; selecting GPT-OSS uses its final answer only and
+does not expose hidden reasoning. `BackgroundTasks` ingestion remains
+non-durable; chat is synchronous and bounded by provider timeouts.
+
+Walkthrough: What does an unsupported question return? HTTP 200 with
+`INSUFFICIENT_CONTEXT`, a fixed refusal, and `sources: []`. Does HTTP 200 mean the
+model answered? No; callers must inspect `status`. What does `thinking_mode`
+change? It selects GPT-OSS 20B; normal mode uses Qwen3 32B, and neither response
+includes private reasoning.
+
+Next: **D1 — Human-reviewed evaluation corpus (10–15 cases)**. No AWS
+deployment or live paid model call was made.
+
 ## A1 runtime command follow-up — 2026-09-24
 
 Status: **PASS** locally. The backend adds `backend/main.py` so `uv run main.py`

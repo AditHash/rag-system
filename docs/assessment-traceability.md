@@ -191,3 +191,13 @@ validates the 1,024-value finite vector returned by the injected provider. Unit
 tests use a fake; no Bedrock inference was made for this increment. Model and
 dimension are selected design choices recorded separately. See
 `docs/progress.md` for exact tests and limitations.
+
+## C2 owner-scoped retrieval — 2026-09-24
+
+R02/R04 **PASS** locally against pgvector. Candidate SQL scopes by owner,
+`READY`, and embedding model, supports optional document IDs and bounded top-k,
+and returns source metadata plus cosine distance/similarity. Orthogonal fixed
+vectors verified ordering and the distance-to-similarity transform; integration
+excluded foreign-owner, failed and unready documents. The HNSW index is present
+but index use, recall, and latency at scale are not measured. This repository
+function is not yet wired into chat. See `docs/progress.md` for exact validation.

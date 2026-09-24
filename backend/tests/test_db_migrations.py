@@ -19,6 +19,7 @@ from src.ingestion import (
     process_job,
 )
 from src.job_repository import get_job_status
+from src.retrieval import retrieve_candidates
 
 
 def test_connection_url_comes_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -198,7 +199,7 @@ def _check_chunk_repository(connection: psycopg.Connection, document_id: str) ->
         chunk_size=4,
         overlap=1,
     )
-    vectors = [[0.01] * 1024 for _ in chunks]
+    vectors = [[1.0] + [0.0] * 1023, [0.0, 1.0] + [0.0] * 1022]
 
     upsert_chunks(connection, "owner-a", document_uuid, chunks, vectors, "v1")
     upsert_chunks(connection, "owner-a", document_uuid, chunks, vectors, "v1")
@@ -233,6 +234,97 @@ def _check_chunk_repository(connection: psycopg.Connection, document_id: str) ->
     assert not mark_document_ready(connection, "owner-a", document_uuid, 3)
     assert mark_document_ready(connection, "owner-a", document_uuid, 2)
     assert _ready_chunk_count(connection, document_uuid) == 2
+    _check_retrieval(connection, document_uuid, chunks[0].chunk_id, chunks[1].chunk_id)
+
+
+def _check_retrieval(
+    connection: psycopg.Connection,
+    ready_document_id: UUID,
+    closest_chunk_id: UUID,
+    second_chunk_id: UUID,
+) -> None:
+    _insert_test_candidate(connection, "owner-a", "processing.txt", "PROCESSING")
+    _insert_test_candidate(connection, "owner-a", "failed.txt", "FAILED")
+    _insert_test_candidate(connection, "owner-b", "other-owner.txt", "READY")
+
+    query_vector = [1.0] + [0.0] * 1023
+    candidates = retrieve_candidates(
+        connection,
+        "owner-a",
+        query_vector,
+        BEDROCK_EMBEDDING_MODEL_ID,
+        top_k=100,
+    )
+    assert [candidate.chunk_id for candidate in candidates] == [closest_chunk_id, second_chunk_id]
+    assert candidates[0].document_id == ready_document_id
+    assert candidates[0].original_filename == "sample.txt"
+    assert candidates[0].page_number == 1
+    assert candidates[0].cosine_distance == pytest.approx(0.0)
+    assert candidates[0].similarity == pytest.approx(1.0)
+    assert candidates[1].cosine_distance == pytest.approx(1.0)
+    assert candidates[1].similarity == pytest.approx(0.0)
+
+    scoped = retrieve_candidates(
+        connection,
+        "owner-a",
+        query_vector,
+        BEDROCK_EMBEDDING_MODEL_ID,
+        document_ids=[ready_document_id],
+    )
+    wrong_model = retrieve_candidates(
+        connection,
+        "owner-a",
+        query_vector,
+        "different-model",
+    )
+    other_owners_results = retrieve_candidates(
+        connection,
+        "owner-b",
+        query_vector,
+        BEDROCK_EMBEDDING_MODEL_ID,
+    )
+    assert [candidate.document_id for candidate in scoped] == [ready_document_id] * 2
+    assert wrong_model == []
+    assert len(other_owners_results) == 1
+    assert other_owners_results[0].original_filename == "other-owner.txt"
+
+
+def _insert_test_candidate(
+    connection: psycopg.Connection, owner_id: str, filename: str, status: str
+) -> None:
+    job = create_job(
+        connection,
+        owner_id=owner_id,
+        original_filename=filename,
+        s3_key=f"documents/{owner_id}/{uuid4()}",
+        checksum_sha256="e" * 64,
+        content_type="text/plain",
+        byte_size=4,
+    )
+    connection.execute(
+        """
+        INSERT INTO chunks (
+            id, document_id, ordinal, page_number, content, embedding, chunker_version
+        ) VALUES (%s, %s, 0, 1, %s, %s::vector, 'test-v1')
+        """,
+        (
+            uuid4(),
+            job.document_id,
+            f"content from {filename}",
+            "[" + ",".join(["1"] + ["0"] * 1023) + "]",
+        ),
+    )
+    if status != "PROCESSING":
+        connection.execute(
+            "UPDATE documents SET status = %s WHERE id = %s",
+            (status, job.document_id),
+        )
+        if status in {"READY", "FAILED"}:
+            job_status = "COMPLETED" if status == "READY" else "FAILED"
+            connection.execute(
+                "UPDATE ingestion_jobs SET status = %s WHERE id = %s",
+                (job_status, job.job_id),
+            )
 
 
 def _chunk_count(connection: psycopg.Connection, document_id: UUID) -> int:

@@ -138,3 +138,14 @@ the indexed model setting. Validate returned shape and finite numeric values
 even when a provider adapter already checks them; this keeps the retrieval
 boundary safe for injected providers and tests. A future model change requires
 re-embedding/migration or an explicit model-partitioned retrieval path.
+
+## C2 cosine retrieval — 2026-09-24
+
+Retrieve from chunks joined to documents, filtering in SQL on owner, `READY`,
+and embedding model; apply requested document IDs as an additional filter.
+Order by pgvector `<=>` (cosine distance), with chunk UUID as a stable tie
+breaker. Return `1 - distance` as cosine similarity and preserve file/page/chunk
+metadata for later citations. Default candidate count is 10, clamped to 1–20.
+The similarity value is only a ranking signal; C4 must define a separately
+evaluated evidence gate. HNSW can accelerate larger corpora, but small-corpus
+performance and index recall need measurements before tuning.

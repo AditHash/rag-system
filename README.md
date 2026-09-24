@@ -137,6 +137,15 @@ not be empty. Retrieval supplies the expected indexed model ID; a mismatch is a
 configuration error, not a reason to silently compare vectors from different
 models.
 
+`backend/src/retrieval.py` searches PostgreSQL chunks using cosine distance. It
+filters by authenticated owner, `READY` document state, and embedding model;
+optional document IDs further narrow the search. The default returns 10
+candidates and the hard limit is 20. Results include the original filename,
+page, chunk ordinal/text, cosine distance, and `similarity = 1 - distance`.
+Similarity is a ranking value, not a calibrated probability that an answer is
+correct. This repository function is tested locally but is not yet connected to
+a chat route.
+
 To run the database migration check, provide an empty, disposable local database
 whose name begins with `a3_test`:
 

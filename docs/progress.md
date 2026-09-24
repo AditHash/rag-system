@@ -650,6 +650,67 @@ of returning an untrustworthy similarity ranking.
 
 Next: **C2 — Owner-scoped pgvector cosine retrieval**.
 
+## C2 — Owner-scoped cosine retrieval
+
+Date: 2026-09-24. Status: **PASS** for unit tests and disposable PostgreSQL/
+pgvector integration. Assessment trace: p1 retrieval from indexed document
+chunks and p1 source metadata; R02/R04. PostgreSQL/pgvector and cosine search
+are selected architecture choices.
+
+`backend/src/retrieval.py:retrieve_candidates` validates its query vector and
+uses a parameterized query joining chunks to documents. SQL filters by exact
+owner ID, document `READY` status, and the expected embedding model; optional
+UUIDs add a scoped document filter. It orders by pgvector `<=>` cosine distance,
+then chunk ID for stable ties, and clamps requested `top_k` to 1–20 (default
+10). Returned rows include chunk/document IDs, original filename, page, ordinal,
+text, cosine distance, and `similarity = 1 - distance`. The caller can request
+zero allowed documents with `document_ids=[]`, which returns no candidates.
+
+Flow: validated query vector + owner/model/document scope + top-k → SQL
+cosine-distance order → typed candidates with source metadata. Invalid vector
+dimension or non-finite values fail before SQL; the DB only returns READY rows
+matching the owner/model filters. Database errors propagate for the service/API
+layer to map safely.
+
+Validation (commands run from `backend/`):
+
+- `uv run --frozen ruff check .`: passed.
+- `uv run --frozen ruff format --check .`: 30 files already formatted.
+- `uv run --frozen pytest -q`: **63 passed, 1 skipped**, two existing
+  Starlette/anyio deprecation warnings.
+- With disposable `pgvector/pgvector:pg18` database `a3_test_c2`,
+  `A3_TEST_DATABASE_URL=... uv run --frozen pytest -q`: **64 passed**. Fixed
+  orthogonal unit vectors confirmed result ordering, distances 0 and 1, and
+  similarities 1 and 0. The integration also confirmed source page/filename,
+  top-k cap, optional document scope, model filter, and exclusion of foreign
+  owner, FAILED and PROCESSING documents. Temporary DB container stopped and
+  removed.
+- Unit tests check similarity transformation, returned metadata, SQL scope
+  predicates, explicit document filters, empty allowed document list, k bounds,
+  and invalid vector rejection. `git diff --check`: passed.
+- No AWS service or paid inference was used.
+
+Security/cost: the owner and document filters remain database predicates, so a
+client cannot obtain another principal's chunks by supplying its document UUID.
+The local DB test is free aside from local compute; no external services were
+called.
+
+Tradeoff: pgvector's `<=>` returns cosine **distance**, so the response computes
+`1 - distance` to report cosine similarity. This score ranks candidates; it is
+not a calibrated probability or refusal threshold. The schema has an HNSW
+cosine index, but this small fixture does not measure index use or large-corpus
+recall/latency. An exact scan may be faster for a tiny corpus; index and
+partition strategy need measurement on representative data.
+
+Walkthrough: Why filter `READY` in the query if there is already a view? The
+repository joins the base tables to enforce owner/model/document predicates in
+the same SQL statement; `READY` still explicitly excludes partial ingestion.
+What does similarity 0.8 mean? Only that the embedding vectors have that
+cosine relationship under this transform; it is not an 80% chance the answer is
+supported.
+
+Next: **C3 — Optional reranker adapter**, then C4 evidence/refusal gate.
+
 ## A1 runtime command follow-up — 2026-09-24
 
 Status: **PASS** locally. The backend adds `backend/main.py` so `uv run main.py`

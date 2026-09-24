@@ -109,3 +109,13 @@ round-trip bytes and failure propagation. No bucket was created or contacted;
 private bucket policy, Block Public Access and IAM are still unverified and must
 be completed before a live deployment. See `docs/progress.md` for the exact
 boundary and tests.
+
+## B3 PDF/TXT extraction — 2026-09-24
+
+R02/R04 **PASS** for local extraction behavior. PDF pages are preserved with
+1-based page numbers, including blank intermediate pages; TXT uses strict UTF-8.
+Synthetic fixtures test exact page mapping, offsets, malformed/textless PDFs and
+invalid text. A read-only extraction check on the local four-page assessment
+confirmed page numbers 1–4 without recording its text. Scanned PDFs are rejected
+because OCR is out of scope. See `docs/progress.md` for exact commands and
+limitations.

@@ -7,9 +7,9 @@ Amazon Bedrock, and ECS Fargate. These describe the target; they are not all
 implemented or deployed yet.
 
 The current backend provides a health endpoint, the first PostgreSQL/pgvector
-schema migration, shared API-key authentication helpers, request validators, and
-an S3 document storage adapter. Ingestion routes, retrieval, grounded answer
-generation, and cloud deployment remain to be implemented.
+schema migration, shared API-key authentication helpers, request validators,
+S3 storage, and PDF/TXT extraction helpers. Ingestion routes, chunking, retrieval,
+grounded answer generation, and cloud deployment remain to be implemented.
 
 ## Local development
 
@@ -75,6 +75,12 @@ Object keys are generated from the owner and document IDs; original filenames ar
 not used as keys. The adapter requests server-side AES-256 encryption and does
 not set a public ACL. Bucket-level Block Public Access and IAM permissions still
 must be configured separately; no S3 bucket has been created or tested here.
+
+`backend/src/extraction.py` returns one text record per PDF page with 1-based
+page numbers, preserving blank pages so later citations keep their original page
+mapping. TXT is decoded as UTF-8 and represented as one record. Offsets count
+characters in each extracted text record. Scanned and password-protected PDFs
+are rejected; OCR is not implemented.
 
 To run the database migration check, provide an empty, disposable local database
 whose name begins with `a3_test`:

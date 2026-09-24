@@ -302,3 +302,42 @@ bucket private? No; it avoids public ACLs and requests encryption, but bucket
 Block Public Access and IAM policies must be configured separately.
 
 Next: **B3 — Text extraction**.
+
+## B3 — PDF and text extraction
+
+Date: 2026-09-24. Status: **PASS** for local extraction tests. Assessment trace:
+p1 document extraction and source traceability (R02/R04); pypdf and the
+page/offset record shape are implementation choices.
+
+`backend/src/extraction.py` exposes `extract_pdf_pages` and `extract_txt`, which
+return `ExtractedPage` records. PDFs are extracted one page at a time with
+1-based source page numbers; blank pages remain in the result. Character offsets
+are measured within each extracted page/text string. TXT is decoded strictly as
+UTF-8 and retains its contents. Invalid, encrypted, empty, or textless PDFs and
+invalid/blank text raise clear `DocumentExtractionError` messages. Scanned PDFs
+are reported as having no extractable text; OCR is outside this MVP.
+
+Validation (commands run from `backend/`):
+
+- `uv run --frozen ruff check .`: passed.
+- `uv run --frozen ruff format --check .`: passed, 15 files already formatted.
+- `uv run --frozen pytest -q`: **19 passed, 1 skipped**, with two existing
+  Starlette/anyio deprecation warnings. Synthetic PDF tests verify page text,
+  blank-page numbering, offsets, invalid input and scanned/textless refusal;
+  TXT tests verify exact decoded contents, offsets, blank input and UTF-8 errors.
+- `uv run --frozen python -c '...extract_pdf_pages(Path("../project-information/Aditya_Assessment.pdf")...)...'`:
+  returned four nonempty pages numbered 1–4. Only page counts/lengths were printed;
+  the private assessment contents were not included in tests or commits.
+- No AWS requests or paid calls.
+
+Tradeoff: pypdf keeps the extraction code small and gives deterministic page
+boundaries for later citation metadata. It does not perform OCR, and extracted
+text may differ from visual layout, tables, or reading order. Offsets identify
+characters in extracted text, not byte positions in the source PDF.
+
+Walkthrough: Why preserve an empty PDF page? Later chunks must retain the PDF's
+original page number rather than shifting citations after a blank page. What
+does a scanned PDF do? It is refused with a clear extraction error because OCR
+is not part of the current scope.
+
+Next: **B4 — Chunker**.

@@ -6,9 +6,10 @@ system. The selected architecture is FastAPI, private S3, PostgreSQL/pgvector,
 Amazon Bedrock, and ECS Fargate. These describe the target; they are not all
 implemented or deployed yet.
 
-The current backend provides a health endpoint and the first PostgreSQL/pgvector
-schema migration. Document upload, authentication, retrieval, grounded answer
-generation, and cloud deployment remain to be implemented.
+The current backend provides a health endpoint, the first PostgreSQL/pgvector
+schema migration, shared API-key authentication helpers, and request validators.
+Ingestion routes, retrieval, grounded answer generation, and cloud deployment
+remain to be implemented.
 
 ## Local development
 
@@ -53,6 +54,13 @@ the URL will point to PostgreSQL on the user's EC2 instance; the database should
 be reachable over the private network. Do not put credentials in source control.
 The down migration removes the three tables and keeps the pgvector extension
 because other applications may use it.
+
+Application routes will use the `X-API-Key` header. Set `API_KEY` in the local
+environment before calling protected routes; the current auth helper maps a
+valid key to one demo principal, so it is not multi-tenant identity management.
+Question input is capped at 4,000 characters. Upload validation accepts PDF and
+UTF-8 TXT up to 10 MiB. Multipart request streaming and full PDF parsing checks
+will be added with the ingestion route and extraction tasks.
 
 Bedrock model IDs are set in `backend/src/config.py` and can be overridden with
 `BEDROCK_EMBEDDING_MODEL_ID`, `BEDROCK_CHAT_MODEL_ID`,
@@ -110,7 +118,8 @@ docker run --rm --name enterprise-rag -p 127.0.0.1:8000:8000 enterprise-rag:loca
 ```
 
 The container runs as UID/GID 10001. It serves only the health endpoint at this
-stage; no AWS clients or database connections start at import time. No cloud
+stage; auth and validation are reusable helpers, not wired to application routes
+yet. No AWS clients or database connections start at import time. No cloud
 resources are created by local development or tests.
 
 See [progress](docs/progress.md),

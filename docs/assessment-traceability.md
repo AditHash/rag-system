@@ -88,3 +88,14 @@ pgvector integration test verified migration up/down, foreign-key owner scope,
 chunk uniqueness, vector dimension, document status checks, and the READY view.
 Owner filtering in retrieval SQL remains a C2 requirement; the view is not a
 replacement for authorization checks.
+
+## B1 authentication and validation — 2026-09-24
+
+R08 **PASS** for reusable auth, validators, and the stable error envelope.
+`X-API-Key` is compared in constant time, maps to one demo principal, and fails
+closed if the server has no configured key. Unit/HTTP tests cover valid, missing
+and invalid keys, empty/oversize questions, accepted and rejected PDF/TXT input,
+oversize files, and sanitized errors. No production application route is
+protected until its endpoint task wires in the dependency. The helper's 10 MiB
+file-byte cap does not constrain multipart buffering; B8 must add a streaming
+request limit. See `docs/progress.md` for exact commands and limitations.

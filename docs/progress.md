@@ -218,4 +218,46 @@ provisioned. The existing Windows PostgreSQL
 local Docker container, not the existing or cloud database. The migration test
 only runs when pointed explicitly at an empty local database named `a3_test*`.
 
-Next after user review: **B1 — Auth and request validation**. Stop here.
+## B1 — API-key authentication and request validation
+
+Date: 2026-09-24. Status: **PASS** for the auth helper, validators, and error
+response contract. Assessment trace: p2 API authentication and validation (R08);
+the `X-API-Key` shape and 10 MiB / 4,000-character limits are plan choices.
+
+`backend/src/auth.py` compares a configured `API_KEY` with the `X-API-Key`
+header using constant-time comparison and returns the single `demo-user` owner.
+Missing server configuration fails closed with 503; missing or invalid caller
+keys receive 401. This is a shared single-principal demo key, not multi-tenant
+identity. `backend/src/validation.py` trims and bounds questions and validates
+bounded PDF/TXT bytes, MIME, PDF signature and UTF-8 text. `backend/src/errors.py`
+returns the stable `{ "error": { "code", "message" } }` envelope and hides
+unexpected exception details. The application installs these handlers, but no
+production application route is protected yet; ingestion/chat routes will wire
+the auth dependency in their own tasks.
+
+Validation (commands from `backend/`):
+
+- `uv run --frozen ruff check .`: passed.
+- `uv run --frozen ruff format --check .`: passed, 11 files already formatted.
+- `uv run --frozen pytest -q`: **11 passed, 1 skipped**, two existing Starlette /
+  anyio deprecation warnings. Tests use local FastAPI test clients and fake key
+  values; no AWS, database or paid calls.
+
+The byte validator itself checks 10 MiB after receiving the body; it does not
+prevent the HTTP server from buffering a larger multipart body. B8 must enforce a
+request-size boundary while reading uploads. A `%PDF-` header is a lightweight
+type check, not full PDF integrity validation; B3 extraction handles malformed or
+image-only PDFs. Filename sanitization for object keys belongs to the S3 task.
+
+Tradeoff: a shared constant-time-compared key keeps this first auth slice easy to
+understand and suitable for a single-user walkthrough. Per-user identity, key
+rotation, and multi-tenant authorization need a stronger identity provider and
+are not claimed here. User-facing validation messages are stable; unexpected
+internal exception details are deliberately hidden.
+
+Walkthrough: What principal does a valid key represent? One fixed `demo-user`,
+which later owner-scoped database queries can use. Does the 10 MiB check stop a
+large multipart body from reaching the process? Not yet; it checks the parsed
+file bytes, and B8 must enforce a streaming request cap.
+
+Next: **B2 — S3 repository**. Stop here for candidate review before proceeding.

@@ -34,7 +34,7 @@ The schema is in `backend/src/migrations/initial_schema.sql`; the rollback is in
 chunks, with embeddings fixed at 1,024 dimensions. It requires PostgreSQL with
 the pgvector extension installed. The `ready_chunks` view only exposes chunks
 whose documents are marked `READY`; retrieval must also filter by owner. Migration
-helpers are in `src/db.py`:
+helpers are in `backend/src/db.py`:
 
 ```python
 from src.db import apply_schema, connect_database
@@ -66,6 +66,19 @@ A3_TEST_DATABASE_URL='postgresql://DB_USER:DB_PASSWORD@localhost:5432/a3_test' u
 
 The test creates and removes the schema. Do not point it at a database containing
 data you need to keep. Without this setting, the database test is skipped.
+
+## Design notes
+
+**Why 1,024 embedding dimensions?** The selected Titan Text Embeddings V2
+configuration returned a 1,024-value vector in the approved live probe. The
+database column is `vector(1024)`, so documents and questions must use the same
+model and dimension. Changing either requires a schema migration and re-embedding
+stored chunks.
+
+**Does `ready_chunks` enforce access control?** No. It hides chunks until their
+document is `READY`, so incomplete ingestion is excluded from retrieval. Each
+retrieval query must also filter by the authenticated caller's `owner_id`. The
+view does not restrict access to the underlying tables or identify the caller.
 
 ## Checks
 

@@ -8,8 +8,9 @@ implemented or deployed yet.
 
 The current backend provides a health endpoint, the first PostgreSQL/pgvector
 schema migration, shared API-key authentication helpers, request validators,
-S3 storage, and PDF/TXT extraction helpers. Ingestion routes, chunking, retrieval,
-grounded answer generation, and cloud deployment remain to be implemented.
+S3 storage, PDF/TXT extraction, and deterministic chunking helpers. Ingestion
+routes, embeddings, retrieval, grounded answer generation, and cloud deployment
+remain to be implemented.
 
 ## Local development
 
@@ -81,6 +82,13 @@ page numbers, preserving blank pages so later citations keep their original page
 mapping. TXT is decoded as UTF-8 and represented as one record. Offsets count
 characters in each extracted text record. Scanned and password-protected PDFs
 are rejected; OCR is not implemented.
+
+`backend/src/chunking.py` splits each text record into fixed-size character
+windows with overlap. Defaults are 1,000 characters and 150 characters of
+overlap; callers can set both values within bounded limits. Each chunk keeps its
+document, page, ordinal, and text offsets, and receives a deterministic ID for
+safe retries. This simple splitter may cut a sentence or word at a boundary; the
+parameters need evaluation against the target documents.
 
 To run the database migration check, provide an empty, disposable local database
 whose name begins with `a3_test`:

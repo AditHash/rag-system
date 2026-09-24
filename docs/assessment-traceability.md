@@ -119,3 +119,11 @@ invalid text. A read-only extraction check on the local four-page assessment
 confirmed page numbers 1–4 without recording its text. Scanned PDFs are rejected
 because OCR is out of scope. See `docs/progress.md` for exact commands and
 limitations.
+
+## B4 chunking — 2026-09-24
+
+R02/R04 **PASS** for deterministic local chunk construction. Tests verify
+character boundaries, configured overlap, page/offset metadata, blank-page
+handling and repeatable document-scoped IDs. Chunk size and overlap are
+implementation starting points requiring retrieval evaluation. See
+`docs/progress.md` for tests and tradeoffs.

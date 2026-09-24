@@ -56,3 +56,12 @@ the selected similarity operator. The `ready_chunks` view filters out documents
 that are still processing; retrieval must also scope every query by owner. The
 down migration removes application tables and view but leaves the pgvector
 extension installed because it can be shared by other applications.
+
+## B4 chunking — 2026-09-24
+
+Start with 1,000-character chunks and 150-character overlap. Character windows
+are easy to bound and explain, and keep source offsets exact; token-aware or
+semantic splitting would add a tokenizer/dependency before the evaluation set
+shows it is needed. Chunk IDs are deterministic UUIDv5 values scoped to the
+document and source location/content, making retries repeatable. These defaults
+are starting points, not measured optimal settings; evaluation may change them.

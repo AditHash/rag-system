@@ -341,3 +341,38 @@ does a scanned PDF do? It is refused with a clear extraction error because OCR
 is not part of the current scope.
 
 Next: **B4 — Chunker**.
+
+## B4 — Deterministic chunking
+
+Date: 2026-09-24. Status: **PASS** for chunk construction and metadata tests.
+Assessment trace: p1 chunking/source citations (R02/R04); 1,000-character chunks
+and 150-character overlap are implementation starting points, not PDF mandates.
+
+`backend/src/chunking.py` adds `chunk_pages` and immutable `DocumentChunk`
+records. It creates fixed character windows independently on each extracted page,
+keeps blank pages out without changing original page numbers, and carries page,
+ordinal, document ID, and per-page text offsets. Defaults are 1,000 characters
+with 150 characters of overlap; settings are bounded to 10,000 characters and no
+more than half the chunk size for overlap. UUIDv5 IDs use the document/source
+location and content hash so retrying the same input yields the same ID.
+
+Validation (commands run from `backend/`):
+
+- `uv run --frozen ruff check .`: passed.
+- `uv run --frozen ruff format --check .`: passed, 17 files already formatted.
+- `uv run --frozen pytest -q`: **27 passed, 1 skipped**, with two existing
+  Starlette/anyio deprecation warnings. Tests cover size, overlap, exact offsets,
+  blank pages, document scope, stable IDs, invalid settings and invalid offsets.
+- No AWS requests, database writes, or paid calls.
+
+Tradeoff: fixed character windows need no tokenizer and give exact traceable
+offsets, but they can split a word or sentence and character count is not token
+count. The selected settings are initial values and must be tuned using retrieval
+evaluation, not described as optimal.
+
+Walkthrough: Why overlap? It repeats a bounded tail at the next chunk's start so
+facts crossing a boundary can appear together; it also duplicates storage and
+embedding work. Why deterministic IDs? Reprocessing unchanged document text and
+settings produces stable keys for safe idempotent persistence.
+
+Next: **B5 — Embedding provider**.

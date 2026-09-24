@@ -9,8 +9,9 @@ implemented or deployed yet.
 The current backend provides a health endpoint, the first PostgreSQL/pgvector
 schema migration, shared API-key authentication helpers, request validators,
 S3 storage, PDF/TXT extraction, and deterministic chunking helpers. Ingestion
-routes, embeddings, retrieval, grounded answer generation, and cloud deployment
-remain to be implemented.
+orchestration and embeddings are implemented as local service components.
+Authenticated upload/status routes, retrieval, grounded answer generation, and
+cloud deployment remain to be implemented.
 
 ## Local development
 
@@ -93,6 +94,15 @@ parameters need evaluation against the target documents.
 `backend/src/chunk_repository.py` writes vectors and chunk metadata in PostgreSQL
 transactions. A document remains hidden from `ready_chunks` until its owner-scoped
 READY transition confirms the expected chunk count.
+
+`backend/src/ingestion.py` connects the existing storage, extraction, chunking,
+embedding, and persistence functions for one document per job. Its database
+connection factory keeps transactions short around external I/O. A failed stage
+stores a stage-only error and marks the document `FAILED`; retrying a completed
+job returns its stored chunk count without repeating inference, and an atomic
+claim rejects simultaneous processing attempts. A worker left in `PROCESSING`
+after process termination currently needs manual retry/recovery. The API route
+and its in-process/queue execution model are still pending.
 
 `backend/src/embedding.py` contains the Bedrock Titan V2 adapter. It uses the
 same model and fixed 1,024 dimensions for document and query embeddings, validates

@@ -97,3 +97,15 @@ same simple command launch without rebuilding/syncing the application package.
 dispatches synchronous route handlers/dependencies to a thread pool; worker
 process count is not thread count. ECS task count is the preferred horizontal
 scale unit; choose process count only after task CPU/memory and load are measured.
+
+## B7 ingestion orchestration — 2026-09-24
+
+Keep external S3/Bedrock calls outside PostgreSQL transactions. Persist each
+stage separately, then commit chunk replacement, document READY, and job
+COMPLETED together in one final transaction. Failure stores only the stage name
+and leaves the document hidden. A repeated completed job is an idempotent no-op;
+a failed job can be retried with deterministic chunk IDs. This is currently a
+single-document job with injected providers; durable execution and request
+idempotency belong to later endpoint/worker tasks. A conditional update claims
+only PENDING or FAILED jobs to prevent concurrent workers from processing one
+job; stuck PROCESSING recovery remains a worker/operations concern.

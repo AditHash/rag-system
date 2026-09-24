@@ -9,8 +9,15 @@ from psycopg.conninfo import conninfo_to_dict
 
 from src.chunk_repository import DocumentNotFoundError, mark_document_ready, upsert_chunks
 from src.chunking import DocumentChunk, chunk_pages
+from src.config import BEDROCK_EMBEDDING_MODEL_ID
 from src.db import apply_schema, connect_database, rollback_schema
 from src.extraction import ExtractedPage
+from src.ingestion import (
+    IngestionAlreadyProcessingError,
+    IngestionIds,
+    create_job,
+    process_job,
+)
 
 
 def test_connection_url_comes_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -42,6 +49,8 @@ def test_schema_constraints_and_rollback(monkeypatch: pytest.MonkeyPatch) -> Non
         _check_invalid_owner(connection, job_id)
         _check_chunk_constraints_and_ready_view(connection, document_id)
         _check_chunk_repository(connection, document_id)
+        connection.commit()
+        _check_ingestion_orchestrator(connection, database_url)
         connection.commit()
         rollback_schema(connection)
         _check_tables_removed(connection)
@@ -235,3 +244,106 @@ def _ready_chunk_count(connection: psycopg.Connection, document_id: UUID) -> int
     return connection.execute(
         "SELECT count(*) FROM ready_chunks WHERE document_id = %s", (document_id,)
     ).fetchone()[0]
+
+
+class FakeDocumentStore:
+    def __init__(self) -> None:
+        self.content_by_document: dict[UUID, bytes] = {}
+
+    def get_document(self, owner_id: str, document_id: UUID) -> bytes:
+        assert owner_id == "owner-a"
+        return self.content_by_document[document_id]
+
+
+class FakeEmbeddingProvider:
+    def __init__(self, fail_once: bool = False) -> None:
+        self.model_id = BEDROCK_EMBEDDING_MODEL_ID
+        self.calls = 0
+        self.fail_once = fail_once
+
+    def embed_texts(self, texts: list[str]) -> list[list[float]]:
+        self.calls += 1
+        if self.fail_once:
+            self.fail_once = False
+            raise RuntimeError("provider secret detail must not be persisted")
+        return [[0.25] * 1024 for _ in texts]
+
+
+def _check_ingestion_orchestrator(
+    connection: psycopg.Connection,
+    database_url: str,
+) -> None:
+    store = FakeDocumentStore()
+    successful_job = _create_text_job(connection, "pipeline.txt")
+    store.content_by_document[successful_job.document_id] = b"A fact for the test corpus."
+    connection.commit()
+
+    successful_embedder = FakeEmbeddingProvider()
+
+    def connection_factory() -> psycopg.Connection:
+        return connect_database(database_url)
+
+    result = process_job(
+        connection_factory, store, successful_embedder, "owner-a", successful_job.job_id
+    )
+    assert result.status == "COMPLETED"
+    assert result.chunk_count == 1
+    assert successful_embedder.calls == 1
+
+    retry_result = process_job(
+        connection_factory, store, successful_embedder, "owner-a", successful_job.job_id
+    )
+    assert retry_result.status == "COMPLETED"
+    assert successful_embedder.calls == 1
+
+    busy_job = _create_text_job(connection, "busy.txt")
+    connection.commit()
+    with connection_factory() as busy_connection:
+        busy_connection.execute(
+            "UPDATE ingestion_jobs SET status = 'PROCESSING' WHERE id = %s",
+            (busy_job.job_id,),
+        )
+    busy_embedder = FakeEmbeddingProvider()
+    with pytest.raises(IngestionAlreadyProcessingError):
+        process_job(connection_factory, store, busy_embedder, "owner-a", busy_job.job_id)
+    assert busy_embedder.calls == 0
+
+    retry_job = _create_text_job(connection, "retry.txt")
+    store.content_by_document[retry_job.document_id] = b"A fact for the test corpus."
+    connection.commit()
+    retrying_embedder = FakeEmbeddingProvider(fail_once=True)
+
+    failed = process_job(connection_factory, store, retrying_embedder, "owner-a", retry_job.job_id)
+    assert failed.status == "FAILED"
+    assert failed.error == "Ingestion failed during embedding"
+
+    with connection_factory() as check_connection:
+        status, sanitized_error = check_connection.execute(
+            "SELECT status, sanitized_error FROM ingestion_jobs WHERE id = %s",
+            (retry_job.job_id,),
+        ).fetchone()
+        document_status = check_connection.execute(
+            "SELECT status FROM documents WHERE id = %s", (retry_job.document_id,)
+        ).fetchone()[0]
+        ready_count = _ready_chunk_count(check_connection, retry_job.document_id)
+    assert status == "FAILED"
+    assert sanitized_error == "Ingestion failed during embedding"
+    assert document_status == "FAILED"
+    assert ready_count == 0
+
+    retried = process_job(connection_factory, store, retrying_embedder, "owner-a", retry_job.job_id)
+    assert retried.status == "COMPLETED"
+    assert retrying_embedder.calls == 2
+
+
+def _create_text_job(connection: psycopg.Connection, filename: str) -> IngestionIds:
+    data = b"A fact for the test corpus."
+    return create_job(
+        connection,
+        owner_id="owner-a",
+        original_filename=filename,
+        s3_key=f"documents/owner-a/{uuid4()}",
+        checksum_sha256="c" * 64,
+        content_type="text/plain",
+        byte_size=len(data),
+    )

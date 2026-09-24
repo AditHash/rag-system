@@ -450,6 +450,38 @@ The replacement transaction rolls back, and the document stays hidden for retry.
 
 Next: **B7 — Ingestion orchestrator**.
 
+## B7 — Ingestion orchestration
+
+Date: 2026-09-24. Status: **PASS** for the local end-to-end service flow with
+fake storage/model clients and disposable pgvector. Assessment trace: p1
+upload-to-index flow (R02), with S3, Bedrock and PostgreSQL as selected choices.
+
+`backend/src/ingestion.py` adds `create_job` and `process_job` for one document per
+job. `create_job` persists a pending job and processing document. `process_job`
+loads the owner-scoped record, advances stages, fetches the object, extracts PDF
+pages or UTF-8 text, chunks it, verifies the embedding model ID, embeds, then
+atomically writes chunks, marks the document READY, and completes the job. Each
+external I/O step runs outside a database transaction. Failures set both job
+and document to `FAILED`; only a safe stage-specific error is stored. Re-entering
+a completed job returns its chunk count without another embedding call. An
+atomic claim rejects a second worker when the job is already PROCESSING. Failed
+jobs can retry using deterministic chunk IDs; a process crash can leave a job
+stuck PROCESSING until a later recovery mechanism is added.
+
+Validation (commands run from `backend/`):
+
+- `A3_TEST_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54329/a3_test_b7 uv run --frozen pytest -q tests/test_db_migrations.py`: **2 passed** against disposable pgvector. The integration helper exercised the full service with fake S3/embedding, completed-job re-entry, active-job duplicate rejection, embed failure, sanitized status, hidden failed chunks, and successful retry.
+- With the same disposable DB enabled, `uv run --frozen pytest -q`: **40 passed**, two existing Starlette/anyio deprecation warnings.
+- `uv run --frozen ruff check .`, `uv run --frozen ruff format --check .`, and `git diff --check`: passed.
+- The first integration run caught the psycopg cursor API issue recorded in B6; after correction all end-to-end cases passed. The local container was stopped and removed.
+- S3 and Bedrock were fakes; no AWS requests/resources or inference charges.
+
+Tradeoff: the flow is intentionally one document per job. Short DB transactions prevent holding locks while S3/Bedrock respond, at the cost of several brief connections/stage writes. Atomic claim prevents concurrent duplicate work, but jobs are not durable queue messages and a process crash can strand PROCESSING status; B8/B10 must handle and document that runtime boundary.
+
+Walkthrough: What prevents partial chunks from becoming searchable? The final transaction commits all replacement rows, READY, and job completion together; the view excludes every non-READY document. What happens after an embedding failure? The job records only the embedding stage, the document remains hidden, and retry reuses the same job/document IDs.
+
+Next: **B8 — Authenticated ingestion endpoint**.
+
 ## A1 runtime command follow-up — 2026-09-24
 
 Status: **PASS** locally. The backend adds `backend/main.py` so `uv run main.py`

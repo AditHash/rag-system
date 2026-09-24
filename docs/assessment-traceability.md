@@ -151,3 +151,11 @@ R01/R12 local run path **PASS**. Both development and Docker now launch through
 synchronous route functions. This is a local container/runtime choice; no ECS
 deployment, task sizing, or load test is claimed. See the progress ledger for the
 Docker smoke result.
+
+## B7 ingestion orchestration — 2026-09-24
+
+R02 **PASS** for a local fake-provider flow using disposable PostgreSQL/pgvector.
+The test covered successful storage-to-READY processing, idempotent completed-job
+re-entry, active-job duplicate rejection, sanitized mid-embedding failure, hidden chunks, and retry. No live S3
+or Bedrock call was made. Authenticated HTTP upload and durable async delivery
+remain later tasks. See `docs/progress.md` for exact results and limits.

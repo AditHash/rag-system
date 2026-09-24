@@ -148,3 +148,74 @@ account remains invocation-blocked; the work profile is the usable Bedrock path.
 
 Next after review: **A3 — Database schema and migration**. Keep implementation
 small: plain SQL, small functions, and direct tests. No source files changed here.
+
+## A3 — PostgreSQL/pgvector schema and migration
+
+Date: 2026-09-24. Status: **PASS** for local schema and migration checks.
+
+Assessment trace: p1 §2 document storage for later ingestion and retrieval (R02),
+plus the selected PostgreSQL/pgvector architecture. This is schema groundwork;
+no upload, embedding, retrieval endpoint, or AWS deployment is claimed.
+
+Files: added a psycopg 3 connection/migration helper and plain SQL up/down files
+under `backend/src/`; tests, dependencies, lockfile, container files, and env
+template are under `backend/`. The repo now reserves `frontend/` for later work.
+`DATABASE_URL` is read from the environment. Model IDs have defaults in
+`backend/src/config.py` and can be overridden by environment variables. AWS
+credential variable names are listed in `backend/.env.example`; it contains no
+values. Tables cover ingestion jobs, documents, and chunks. `vector(1024)` matches
+the verified Titan Text Embeddings V2 probe. The cosine HNSW index supports the
+planned similarity operator. `ready_chunks` filters out documents until they are
+`READY`. README documents the EC2 PostgreSQL deployment choice without claiming
+that an EC2 instance or database has been provisioned.
+
+Flow: an explicit database URL → `connect_database` opens a psycopg connection →
+`apply_schema` runs the SQL in one transaction; `rollback_schema` drops the
+application view and tables in one transaction while leaving the extension
+installed. The schema enforces job/document states, owner-to-job relationship,
+unique S3 key, SHA-256 format, positive byte/page sizes, unique chunk ordinal, and
+the 1,024-dimensional vector. The `ready_chunks` view excludes processing and
+failed documents. Later retrieval code must still scope every query to the caller's
+owner. Invalid URLs, missing permissions/extension, SQL errors, and bad data fail
+with PostgreSQL/psycopg errors; no silent fallback is used.
+
+Validation (commands run from `backend/`):
+
+- `A3_TEST_DATABASE_URL=postgresql://postgres@127.0.0.1:54329/a3_test uv run --frozen pytest -q tests/test_db_migrations.py` from `backend/`: **2 passed** against a disposable local `pgvector/pgvector:pg18` container. Verified up/down, owner-scoped foreign key, duplicate chunk rejection, invalid document status, 3-vs-1,024 vector rejection, READY-view filtering, and `DATABASE_URL` lookup.
+- `uv run --frozen pytest -q` from `backend/`: **4 passed, 1 skipped** (the database integration test skips without its explicit disposable database URL); two existing Starlette/anyio deprecation warnings remain.
+- `uv run --frozen ruff check .` and `uv run --frozen ruff format --check .` from `backend/`: passed after the final config formatting.
+- `uv build --no-sources` from `backend/`: source and wheel built; inspected wheel to confirm `config.py`, migration helpers, and SQL files are included.
+- `docker.exe build -t document-qa:local .` from `backend/`: passed. The first immediate health probe raced container startup and reset; after startup completed, retry returned `GET /health` → HTTP 200, `{"status":"ok"}`. Both temporary test containers were removed.
+- The first migration rollback check found that an earlier query had opened an implicit transaction, so the down migration was only inside a savepoint. The integration test now commits its data checks before running down migration, then confirms the tables are gone; the final disposable database run passed.
+- Ruff initially reported unsorted imports and one formatting difference during the refactor; both were fixed before the final successful lint/format run.
+- No AWS resources or Bedrock calls. README/source name scan and `git diff --check`: clean.
+
+Tradeoff: plain SQL keeps the schema visible and easy to explain; psycopg supplies
+direct connections and transactions without an ORM or migration framework. The
+cosine HNSW index is convenient for later approximate search but adds index memory
+and build cost; exact search may be simpler for a tiny corpus. The extension is
+left installed on rollback because it may be shared. No timestamp triggers or
+cross-table job-completion rules are added; the ingestion transaction will own
+those in later tasks.
+
+Walkthrough:
+
+- Why `vector(1024)`? It matches the verified embedding model output; another
+  dimension would be rejected by PostgreSQL and must use a separately migrated
+  schema.
+- How are READY chunks selected? The view joins chunks to documents and includes
+  only `READY`; retrieval still needs an owner filter, as the view alone is not an
+  authorization boundary.
+
+Selected deployment database: PostgreSQL with pgvector on a privately reachable
+EC2 instance, supplied to the backend through `DATABASE_URL`. Model IDs have
+defaults in `backend/src/config.py` and can be overridden by config edits or env.
+AWS clients will consume `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and the
+optional `AWS_SESSION_TOKEN` environment values; no real credential values are
+stored in the repo. This is a design choice only; no EC2 resources were
+provisioned. The existing Windows PostgreSQL
+18 installation lacks pgvector. The first integration check used an isolated
+local Docker container, not the existing or cloud database. The migration test
+only runs when pointed explicitly at an empty local database named `a3_test*`.
+
+Next after user review: **B1 — Auth and request validation**. Stop here.

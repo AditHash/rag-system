@@ -1,0 +1,4 @@
+DROP VIEW IF EXISTS ready_chunks;
+DROP TABLE IF EXISTS chunks;
+DROP TABLE IF EXISTS documents;
+DROP TABLE IF EXISTS ingestion_jobs;

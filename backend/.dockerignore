@@ -4,5 +4,6 @@
 !pyproject.toml
 !uv.lock
 !src/
-!src/addroit_docqa/
-!src/addroit_docqa/*.py
+!src/*.py
+!src/migrations/
+!src/migrations/*.sql

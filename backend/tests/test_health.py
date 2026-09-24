@@ -2,7 +2,7 @@
 
 from fastapi.testclient import TestClient
 
-from addroit_docqa.main import create_app
+from src.main import create_app
 
 
 def test_health_contract() -> None:

@@ -14,4 +14,4 @@ RUN uv sync --frozen --no-dev --no-editable \
     && useradd --uid 10001 --gid app --no-create-home app
 USER 10001:10001
 EXPOSE 8000
-CMD ["uvicorn", "addroit_docqa.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
+CMD ["uvicorn", "src.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]

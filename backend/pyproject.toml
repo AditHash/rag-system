@@ -3,18 +3,19 @@ requires = ["hatchling==1.29.0"]
 build-backend = "hatchling.build"
 
 [project]
-name = "addroit-docqa"
+name = "document-qa-api"
 version = "0.1.0"
-description = "AWS-native document Q&A assessment"
+description = "Document Q&A API"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "fastapi==0.141.1",
+    "psycopg[binary]==3.3.6",
     "pydantic==2.13.5",
     "uvicorn==0.53.0",
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/addroit_docqa"]
+packages = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

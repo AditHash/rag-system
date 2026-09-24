@@ -6,13 +6,13 @@ Recorded at A0, 2026-09-20. These are selected design directions, not implemente
 |---|---|---|
 | Follow PDF outcomes and plan task order; stop after each task | Keeps increments reviewable and defensible; adds explicit review checkpoints | Active workflow |
 | ECS Fargate + FastAPI | User-selected container API; greater control over runtime/worker lifecycle than Lambda, with idle cost and networking overhead | Selected, not built |
-| Private S3 + PostgreSQL/pgvector | User-selected split: raw documents in object storage, transactional metadata/vectors in DB; avoids separate vector-store machinery, but DB scaling/indexing require care | Selected; hosting not provisioned |
-| Amazon Bedrock through separately authorized account credentials | Matches user access situation; adds auth, ownership and billing boundaries. Credential mechanism must be verified before adapter selection | Integration unverified; A2 approval gate |
+| Private S3 + PostgreSQL/pgvector | Raw documents in object storage; transactional metadata/vectors in PostgreSQL | Selected; PostgreSQL will run on EC2, with `DATABASE_URL` supplied to the backend through environment configuration. No EC2 resources provisioned |
+| Amazon Bedrock through separately authorized account credentials | Matches user access situation; adds auth, ownership and billing boundaries | Bounded work-account probes passed in A2; deployed ECS credential path remains unimplemented |
 | Layered grounding and server-built citations | Meets highest-priority refusal/verifiability requirements; citation existence alone does not prove factual support | Planned, no mechanism implemented |
 | SQS worker conditional; reranker/Guardrails optional | Protects core scope and budget. Skipping durable queue requires explicit interruption limitations; optional model calls add cost/latency | Undecided/off until implemented and verified |
 | Deterministic local fakes; separately approved live checks | Local testing without inference charges; fake success cannot establish real AWS access or evaluation quality | Planned test policy |
 
-Pending: confirmed deadline, region, authorized credential type/lifetime/billing, generation and embedding models/dimensions/quotas, worker mode, database hosting, ingress and approved budget. No secrets belong in these records.
+Pending: confirmed deadline, deployed ECS credential path, account-owner authorization for ongoing inference, PostgreSQL EC2 sizing/networking, worker mode, ingress and approved budget. No secrets belong in these records.
 
 ## A1 implementation choices — 2026-09-21
 
@@ -41,5 +41,17 @@ generation: OpenAI GPT-OSS 20B (`openai.gpt-oss-20b-1:0`). Optional reranking:
 Cohere Rerank 3.5 (`cohere.rerank-v3-5:0`). Ordinary questions route to Qwen;
 complex or conflicting questions route to GPT-OSS. This is model routing, not a
 promise to expose hidden reasoning. Retrieval starts cosine top-10 and reranks to
-top-5. All model calls remain blocked until Bedrock invocation access is granted;
-local tests use deterministic fakes.
+top-5. Model IDs have defaults in `backend/src/config.py` with environment
+overrides. AWS credentials will be consumed from `AWS_ACCESS_KEY_ID`,
+`AWS_SECRET_ACCESS_KEY`, and optional `AWS_SESSION_TOKEN`; no real values belong in
+the repository. Bounded model probes passed using the authorized work-account
+profile; application adapters and deployed ECS credentials are still unimplemented.
+
+## A3 database schema — 2026-09-24
+
+Use direct PostgreSQL SQL migrations and psycopg 3, with no ORM or migration
+framework. Store Titan embeddings as `vector(1024)`. A cosine HNSW index supports
+the selected similarity operator. The `ready_chunks` view filters out documents
+that are still processing; retrieval must also scope every query by owner. The
+down migration removes application tables and view but leaves the pgvector
+extension installed because it can be shared by other applications.

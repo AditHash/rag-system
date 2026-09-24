@@ -240,3 +240,13 @@ and excerpt from the exact retrieved candidates. Refusals return no sources.
 The model cannot supply or override citation metadata. Tests include multi-source
 answers and disposable pgvector metadata. Valid ID existence is not semantic
 entailment, which remains a limitation for evaluation. No AWS calls were made.
+
+## C7 answer orchestration — 2026-09-24
+
+R02–R05 **PASS** for the local question-to-answer/refusal service with fake
+providers. It embeds, retrieves owner-scoped READY chunks, stops empty/weak
+evidence before reranking/generation, optionally reranks, generates with Qwen or
+explicit GPT-OSS thinking mode, then validates and assembles source IDs. Invalid
+citations become a bounded refusal; provider/DB failures remain service errors.
+No live model or DB call was made in these unit-flow tests. The HTTP chat route
+is still pending.

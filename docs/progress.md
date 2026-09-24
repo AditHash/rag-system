@@ -929,6 +929,59 @@ or by a separate evidence-support method.
 
 Next: **C7 — End-to-end answer orchestrator**.
 
+## C7 — End-to-end answer orchestration
+
+Date: 2026-09-24. Status: **PASS** for local fake-provider flow. Assessment
+trace: p1 complete question-to-grounded-answer/refusal flow; R02–R05. The
+selected models, pgvector, and optional reranker are architecture choices.
+
+`backend/src/answering.py:answer_question` trims and bounds the question, embeds
+it with the configured index model, retrieves only the authenticated owner's
+matching READY chunks, and assesses the cosine evidence threshold. Empty/weak
+evidence returns the fixed `INSUFFICIENT_CONTEXT` message before any rerank or
+generation request. If configured, the optional reranker orders only evidence
+that already passed the gate; provider failure passes the original cosine order
+through without scores. The service sends at most five candidates to generation.
+
+`thinking_mode=False` selects Qwen3 32B; `True` selects GPT-OSS 20B. This is an
+explicit caller choice, not automatic complexity detection, and no internal
+reasoning content is returned. The generated JSON is bound through C6 to the
+same post-rerank source ordering. Invalid/missing/unknown citations become a
+fixed safe refusal with no sources. Embedding, DB, or generation service errors
+propagate as typed/sanitized errors for the HTTP layer to map to 503; unsupported
+questions are a normal `INSUFFICIENT_CONTEXT` result rather than a service
+error.
+
+Validation (commands run from `backend/`):
+
+- `uv run --frozen ruff check .`: passed.
+- `uv run --frozen ruff format --check .`: **40 files already formatted**.
+- `uv run --frozen pytest -q`: **112 passed, 1 skipped**, two existing
+  Starlette/anyio deprecation warnings.
+- Fake-service tests cover empty corpus and weak evidence without reranker or
+  generator calls; successful Qwen flow; candidate reordering and post-rerank
+  source mapping; explicit GPT-OSS mode; reranker failure passthrough; invalid
+  citations converted to refusal; and generation error propagation. No AWS call,
+  database access, or paid inference was made for this service slice.
+- `git diff --check`: passed.
+
+Security/cost: owner/document filtering remains in the retrieval query; weak
+evidence avoids both optional reranking and generation charges. The direct
+thinking-mode choice may cost more per request; callers should use it only when
+needed. Service errors are not converted into unsupported-answer refusals.
+
+Tradeoff: a caller-controlled mode is predictable and simple, but clients can
+choose the slower/costlier GPT-OSS path. The mode does not expose hidden chain of
+thought. Automatic complexity routing would require another heuristic and
+should only be added if evaluation shows a benefit.
+
+Walkthrough: What prevents an unsupported question from reaching Bedrock
+generation? The evidence gate runs immediately after retrieval and returns
+before the optional reranker and generator. What happens if a model cites `S99`?
+C6 rejects the ID and C7 returns a bounded refusal with no source metadata.
+
+Next: **C8 — Authenticated `POST /api/v1/chat` API contract**.
+
 ## A1 runtime command follow-up — 2026-09-24
 
 Status: **PASS** locally. The backend adds `backend/main.py` so `uv run main.py`

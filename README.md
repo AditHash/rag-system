@@ -11,7 +11,8 @@ ingestion endpoint. It stores the upload in S3, creates a PostgreSQL job, and
 returns `202 PENDING` before background extraction, chunking, embedding, and
 index persistence run. An authenticated status endpoint reports persisted job
 state and document IDs. Retrieval, grounded answer generation, and cloud
-deployment remain to be implemented.
+answer orchestration are implemented as local service functions. The authenticated
+chat HTTP route and cloud deployment remain to be implemented.
 
 ## Local development
 
@@ -172,9 +173,10 @@ outside knowledge, invented source IDs, metadata, or hidden reasoning. The
 Bedrock Converse adapter bounds output to 1,024 tokens and parses exactly
 `status`, `answer`, and `cited_source_ids`; malformed JSON or upstream errors
 fail closed. The parser does not yet verify that cited IDs belong to retrieved
-evidence or prove claim support—that is the separate C6 stage. Qwen3 32B is the
-normal model and GPT-OSS 20B is available for the later thinking-mode router.
-No live generation call runs in regular tests.
+evidence; the separate C6 validator now binds those IDs to trusted retrieval
+records. Citation validity still does not prove claim support. Qwen3 32B is the
+normal model and GPT-OSS 20B is used when the caller selects thinking mode. No
+live generation call runs in regular tests.
 
 `backend/src/citations.py` validates every model-selected source ID against the
 server's prompt mapping. It builds each returned source from the original
@@ -182,6 +184,14 @@ retrieval record: document ID, filename, page, offsets, and excerpt. Missing,
 duplicate, or unknown IDs fail validation; a refusal returns an empty source
 list. Valid IDs prove only that a source was retrieved, not that it logically
 supports the full answer, so semantic correctness still needs evaluation.
+
+`backend/src/answering.py` connects query embedding, scoped vector retrieval,
+the evidence gate, optional reranking, generation, and citation validation.
+Empty/weak evidence returns `INSUFFICIENT_CONTEXT` before the reranker or
+generator is called. `thinking_mode=false` selects Qwen3 32B; `true` selects
+GPT-OSS 20B. The service returns a fixed safe refusal if citation IDs fail
+validation. The HTTP chat endpoint will be added separately; unit tests inject
+fake providers and make no Bedrock calls.
 
 To run the database migration check, provide an empty, disposable local database
 whose name begins with `a3_test`:

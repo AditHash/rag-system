@@ -193,3 +193,14 @@ duplicate or unknown IDs. Build each source response from the DB-derived
 candidate: filename, page, offsets, and excerpt. Refusals carry an empty source
 list. This prevents fabricated citation metadata but does not prove that a
 source entails each claim; correctness remains an evaluation question.
+
+## C7 answer mode and flow — 2026-09-24
+
+Compose embedding → owner-scoped retrieval → evidence gate → optional rerank →
+generation → citation binding in one service function. Run the evidence gate
+before reranking/generation so unsupported questions avoid those extra model
+costs. Preserve vector order and omit scores if reranking fails. Use an explicit
+`thinking_mode` boolean: false selects Qwen3 32B; true selects GPT-OSS 20B. Do
+not output hidden reasoning. If generated citation IDs fail validation, return
+a fixed refusal with no sources; keep upstream failures distinguishable from
+ordinary unsupported questions.

@@ -414,3 +414,38 @@ search. What does retry exhaustion do? It returns a sanitized provider error; it
 does not create a fake vector or silently substitute another model.
 
 Next: **B6 — Chunk persistence**.
+
+## B6 — Transactional chunk persistence
+
+Date: 2026-09-24. Status: **PASS** against a disposable local pgvector database.
+Assessment trace: p1 persist chunks for retrieval (R02), p1 source metadata
+(R04), and the selected PostgreSQL/pgvector design.
+
+`backend/src/chunk_repository.py` adds `upsert_chunks` and
+`mark_document_ready`. Upsert validates owner/document association, chunk/vector
+count, finite vector values and the 1,024 dimension; it then marks the document
+`PROCESSING`, replaces chunks and writes vectors within one transaction. A DB
+constraint failure rolls back both the deletion and inserts. The owner-scoped
+READY update succeeds only when the expected positive chunk count exists.
+Callers can wrap both functions in an outer transaction so chunk replacement and
+READY commit together. A document left `PROCESSING` remains hidden from the
+`ready_chunks` view.
+
+Validation (commands run from `backend/`):
+
+- `A3_TEST_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54329/a3_test_b6 uv run --frozen pytest -q tests/test_db_migrations.py`: **2 passed** against a disposable `pgvector/pgvector:pg18` container. The test verified repeat writes keep two rows, failed replacement restores prior rows, wrong owner cannot write or mark READY, incorrect expected count cannot mark READY, and the view reveals chunks only after the correct transition.
+- The first integration run caught use of `Connection.executemany`; switched to the psycopg cursor API before the passing run.
+- With the same test DB enabled, `uv run --frozen pytest -q`: **39 passed**, two existing Starlette/anyio deprecation warnings.
+- `uv run --frozen ruff check .`, `uv run --frozen ruff format --check .`, and `git diff --check`: passed.
+- The temporary container was stopped and removed. No AWS resources or paid calls.
+
+Tradeoff: replacing the whole chunk set is easy to retry and restores the old set
+on failure, but it rewrites unchanged chunks. Stable UUIDs plus `UNIQUE(document_id,
+ordinal)` prevent duplicates. The selected HNSW index is maintained by PostgreSQL
+as rows are replaced; larger ingestion batches may need measured tuning.
+
+Walkthrough: When does content become searchable? Only after the owner-scoped
+READY transition sees the expected stored chunk count. What if one insert fails?
+The replacement transaction rolls back, and the document stays hidden for retry.
+
+Next: **B7 — Ingestion orchestrator**.

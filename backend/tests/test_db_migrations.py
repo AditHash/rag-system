@@ -1,13 +1,16 @@
 """Database migration checks for an explicitly disposable local database."""
 
 import os
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import psycopg
 import pytest
 from psycopg.conninfo import conninfo_to_dict
 
+from src.chunk_repository import DocumentNotFoundError, mark_document_ready, upsert_chunks
+from src.chunking import DocumentChunk, chunk_pages
 from src.db import apply_schema, connect_database, rollback_schema
+from src.extraction import ExtractedPage
 
 
 def test_connection_url_comes_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -38,6 +41,7 @@ def test_schema_constraints_and_rollback(monkeypatch: pytest.MonkeyPatch) -> Non
         job_id, document_id = _insert_job_and_document(connection)
         _check_invalid_owner(connection, job_id)
         _check_chunk_constraints_and_ready_view(connection, document_id)
+        _check_chunk_repository(connection, document_id)
         connection.commit()
         rollback_schema(connection)
         _check_tables_removed(connection)
@@ -174,3 +178,60 @@ def _check_tables_removed(connection: psycopg.Connection) -> None:
         """
     ).fetchall()
     assert rows == []
+
+
+def _check_chunk_repository(connection: psycopg.Connection, document_id: str) -> None:
+    document_uuid = UUID(document_id)
+    chunks = chunk_pages(
+        [ExtractedPage(page_number=1, text="abcdef", start_offset=0, end_offset=6)],
+        document_uuid,
+        chunk_size=4,
+        overlap=1,
+    )
+    vectors = [[0.01] * 1024 for _ in chunks]
+
+    upsert_chunks(connection, "owner-a", document_uuid, chunks, vectors, "v1")
+    upsert_chunks(connection, "owner-a", document_uuid, chunks, vectors, "v1")
+    assert _chunk_count(connection, document_uuid) == 2
+    assert _ready_chunk_count(connection, document_uuid) == 0
+
+    with pytest.raises(DocumentNotFoundError):
+        upsert_chunks(connection, "owner-b", document_uuid, chunks, vectors, "v1")
+
+    invalid_chunk = DocumentChunk(
+        chunk_id=uuid4(),
+        document_id=document_uuid,
+        ordinal=0,
+        page_number=0,
+        start_offset=0,
+        end_offset=4,
+        content="new text",
+    )
+    with pytest.raises(psycopg.errors.CheckViolation):
+        upsert_chunks(
+            connection,
+            "owner-a",
+            document_uuid,
+            [invalid_chunk],
+            [[0.02] * 1024],
+            "v2",
+        )
+    assert _chunk_count(connection, document_uuid) == 2
+    assert _ready_chunk_count(connection, document_uuid) == 0
+
+    assert not mark_document_ready(connection, "owner-b", document_uuid, 2)
+    assert not mark_document_ready(connection, "owner-a", document_uuid, 3)
+    assert mark_document_ready(connection, "owner-a", document_uuid, 2)
+    assert _ready_chunk_count(connection, document_uuid) == 2
+
+
+def _chunk_count(connection: psycopg.Connection, document_id: UUID) -> int:
+    return connection.execute(
+        "SELECT count(*) FROM chunks WHERE document_id = %s", (document_id,)
+    ).fetchone()[0]
+
+
+def _ready_chunk_count(connection: psycopg.Connection, document_id: UUID) -> int:
+    return connection.execute(
+        "SELECT count(*) FROM ready_chunks WHERE document_id = %s", (document_id,)
+    ).fetchone()[0]

@@ -135,3 +135,10 @@ checks 1,024 dimensions for both document and query text, with bounded throttlin
 retries. Tests use a fake Bedrock client; no live call or current credential
 verification is claimed. A previous bounded model probe is recorded under A2.
 See `docs/progress.md` for exact tests and current limitations.
+
+## B6 chunk persistence — 2026-09-24
+
+R02/R04 **PASS** against disposable local pgvector. Replacing chunk rows is
+transactional, owner-scoped, and tested for retries, rollback, expected counts,
+and READY-view visibility. Live AWS storage and ingestion remain untested. See
+`docs/progress.md` for exact database, test, and cleanup evidence.

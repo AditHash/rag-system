@@ -90,6 +90,10 @@ document, page, ordinal, and text offsets, and receives a deterministic ID for
 safe retries. This simple splitter may cut a sentence or word at a boundary; the
 parameters need evaluation against the target documents.
 
+`backend/src/chunk_repository.py` writes vectors and chunk metadata in PostgreSQL
+transactions. A document remains hidden from `ready_chunks` until its owner-scoped
+READY transition confirms the expected chunk count.
+
 `backend/src/embedding.py` contains the Bedrock Titan V2 adapter. It uses the
 same model and fixed 1,024 dimensions for document and query embeddings, validates
 each response before returning it, and retries throttling at most twice after

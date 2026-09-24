@@ -76,3 +76,13 @@ It performs one request per text and has three total application attempts for
 throttling/server failures, with SDK retries disabled so that bound is explicit.
 This is simple and predictable but may add latency and call cost for large
 documents; batching/throughput tuning belongs after end-to-end evaluation.
+
+## B6 chunk persistence — 2026-09-24
+
+Replace a document's chunk set inside one PostgreSQL transaction on retry. This
+keeps stable IDs idempotent and rolls back deletion if any insert violates a
+constraint. Set the document to `PROCESSING` before replacement so `ready_chunks`
+does not expose a partial set. `mark_document_ready` is owner-scoped and checks
+the expected chunk count. The orchestrator should call both operations within one
+outer transaction to commit the completed set and READY state together; a crash
+before then leaves the document hidden and retryable.

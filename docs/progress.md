@@ -449,3 +449,26 @@ READY transition sees the expected stored chunk count. What if one insert fails?
 The replacement transaction rolls back, and the document stays hidden for retry.
 
 Next: **B7 — Ingestion orchestrator**.
+
+## A1 runtime command follow-up — 2026-09-24
+
+Status: **PASS** locally. The backend adds `backend/main.py` so `uv run main.py`
+starts the Uvicorn app. The Dockerfile installs locked dependencies using
+`uv sync --frozen --no-dev --no-install-project`, copies the runtime source, and
+uses `CMD ["uv", "run", "main.py"]`; `UV_NO_SYNC=1` prevents startup-time
+resynchronization. `WEB_CONCURRENCY` sets Uvicorn worker processes (default 1).
+This is process concurrency, while FastAPI dispatches synchronous route handlers
+and dependencies to its thread pool. ECS CPU/memory and task scaling have not
+been configured; no claim is made that multiple workers improve throughput for
+this workload without measurement.
+
+Validation:
+
+- `uv run --frozen ruff check .`: passed.
+- `uv run --frozen ruff format --check .`: 23 files already formatted.
+- `uv run --frozen pytest -q`: **39 passed, 1 skipped**, with two existing
+  Starlette/anyio deprecation warnings. The new test verifies the worker setting.
+- `uv run --frozen main.py` from `backend/`, then `curl --fail --silent --show-error http://127.0.0.1:8000/health`: returned `{"status":"ok"}`; the process shut down cleanly.
+- `docker.exe build -t enterprise-rag:local .` from `backend/`: passed. Build ran `uv sync --frozen --no-dev --no-install-project` and installed 23 runtime dependencies without building/installing the backend project.
+- Ran the resulting container and called `GET /health`: HTTP 200 with `{"status":"ok"}`. The temporary container was stopped and removed.
+- `UV_NO_SYNC=1` is the documented uv environment setting that prevents the startup `uv run` from syncing the venv. No AWS resources or inference calls were used.

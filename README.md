@@ -21,7 +21,7 @@ frontend will live under `frontend/`.
 ```bash
 cd backend
 uv sync --frozen
-uv run --frozen uvicorn src.main:create_app --factory --reload --host 127.0.0.1 --port 8000 --no-access-log
+uv run main.py
 ```
 
 Check the service:
@@ -151,6 +151,15 @@ The container runs as UID/GID 10001. It serves only the health endpoint at this
 stage; auth and validation are reusable helpers, not wired to application routes
 yet. No AWS clients or database connections start at import time. No cloud
 resources are created by local development or tests.
+
+The Docker image syncs locked runtime dependencies without installing/building
+the local project package, then starts with `uv run main.py`. `UV_NO_SYNC=1`
+prevents a second environment sync at container startup. `WEB_CONCURRENCY`
+controls Uvicorn worker processes and defaults to 1. FastAPI runs synchronous
+route handlers and dependencies in a thread pool; Uvicorn workers are separate
+processes, not threads. For ECS, begin with one worker per task and scale task
+count horizontally; increase workers only after matching them to the task's CPU
+and memory and measuring load. No ECS sizing or scaling resources are configured.
 
 See [progress](docs/progress.md),
 [assessment traceability](docs/assessment-traceability.md), and

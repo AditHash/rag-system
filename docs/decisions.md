@@ -12,6 +12,7 @@ Recorded at A0, 2026-09-20. These are selected design directions, not implemente
 | Layered grounding and server-built citations | Meets highest-priority refusal/verifiability requirements; citation existence alone does not prove factual support | Planned, no mechanism implemented |
 | SQS worker conditional; reranker/Guardrails optional | Protects core scope and budget. Skipping durable queue requires explicit interruption limitations; optional model calls add cost/latency | Undecided/off until implemented and verified |
 | Deterministic local fakes; separately approved live checks | Local testing without inference charges; fake success cannot establish real AWS access or evaluation quality | Planned test policy |
+| Start the API through `uv run main.py`; runtime image installs dependencies only | Avoid a package build/install step for this simple service; keep the container command directly runnable | Implemented locally; no deployment |
 
 Pending: confirmed deadline, deployed ECS credential path, account-owner authorization for ongoing inference, PostgreSQL EC2 sizing/networking, worker mode, ingress and approved budget. No secrets belong in these records.
 
@@ -86,3 +87,13 @@ does not expose a partial set. `mark_document_ready` is owner-scoped and checks
 the expected chunk count. The orchestrator should call both operations within one
 outer transaction to commit the completed set and READY state together; a crash
 before then leaves the document hidden and retryable.
+
+## A1 runtime command and ECS concurrency — 2026-09-24
+
+Use `uv run main.py` for local and container startup. The Docker build installs
+locked dependencies with `--no-install-project`, then `UV_NO_SYNC=1` makes the
+same simple command launch without rebuilding/syncing the application package.
+`WEB_CONCURRENCY` configures Uvicorn worker processes, defaulting to one. FastAPI
+dispatches synchronous route handlers/dependencies to a thread pool; worker
+process count is not thread count. ECS task count is the preferred horizontal
+scale unit; choose process count only after task CPU/memory and load are measured.

@@ -1,6 +1,7 @@
 # Allow only the files required to build the runtime image.
 **
 !Dockerfile
+!main.py
 !pyproject.toml
 !uv.lock
 !src/

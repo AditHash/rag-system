@@ -142,3 +142,12 @@ R02/R04 **PASS** against disposable local pgvector. Replacing chunk rows is
 transactional, owner-scoped, and tested for retries, rollback, expected counts,
 and READY-view visibility. Live AWS storage and ingestion remain untested. See
 `docs/progress.md` for exact database, test, and cleanup evidence.
+
+## A1 runtime command follow-up — 2026-09-24
+
+R01/R12 local run path **PASS**. Both development and Docker now launch through
+`uv run main.py`; the Docker environment avoids installing the project package.
+`WEB_CONCURRENCY` controls Uvicorn processes, with FastAPI's thread pool handling
+synchronous route functions. This is a local container/runtime choice; no ECS
+deployment, task sizing, or load test is claimed. See the progress ledger for the
+Docker smoke result.

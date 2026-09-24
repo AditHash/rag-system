@@ -1,5 +1,7 @@
 """Local HTTP contract checks; no AWS credentials or network needed."""
 
+from unittest.mock import patch
+
 from fastapi.testclient import TestClient
 
 from src.main import create_app
@@ -19,3 +21,20 @@ def test_only_health_is_exposed_in_openapi() -> None:
         assert client.post("/api/v1/chat", json={"question": "hello"}).status_code == 404
     assert set(schema["paths"]) == {"/health"}
     assert "200" in schema["paths"]["/health"]["get"]["responses"]
+
+
+def test_main_uses_configured_worker_count(monkeypatch) -> None:
+    from main import main
+
+    monkeypatch.setenv("WEB_CONCURRENCY", "2")
+    with patch("main.uvicorn.run") as run_server:
+        main()
+
+    run_server.assert_called_once_with(
+        "src.main:create_app",
+        factory=True,
+        host="0.0.0.0",
+        port=8000,
+        workers=2,
+        access_log=False,
+    )

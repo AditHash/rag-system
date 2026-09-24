@@ -7,9 +7,9 @@ Amazon Bedrock, and ECS Fargate. These describe the target; they are not all
 implemented or deployed yet.
 
 The current backend provides a health endpoint, the first PostgreSQL/pgvector
-schema migration, shared API-key authentication helpers, and request validators.
-Ingestion routes, retrieval, grounded answer generation, and cloud deployment
-remain to be implemented.
+schema migration, shared API-key authentication helpers, request validators, and
+an S3 document storage adapter. Ingestion routes, retrieval, grounded answer
+generation, and cloud deployment remain to be implemented.
 
 ## Local development
 
@@ -68,6 +68,13 @@ Bedrock model IDs are set in `backend/src/config.py` and can be overridden with
 credentials come from environment variables. `backend/.env.example` lists the
 variable names only; supply real credentials through local environment or a
 secret store.
+
+`backend/src/storage.py` uses the standard boto3 credential chain, including AWS
+credential environment variables, and reads the bucket name from `S3_BUCKET`.
+Object keys are generated from the owner and document IDs; original filenames are
+not used as keys. The adapter requests server-side AES-256 encryption and does
+not set a public ACL. Bucket-level Block Public Access and IAM permissions still
+must be configured separately; no S3 bucket has been created or tested here.
 
 To run the database migration check, provide an empty, disposable local database
 whose name begins with `a3_test`:

@@ -99,3 +99,13 @@ oversize files, and sanitized errors. No production application route is
 protected until its endpoint task wires in the dependency. The helper's 10 MiB
 file-byte cap does not constrain multipart buffering; B8 must add a streaming
 request limit. See `docs/progress.md` for exact commands and limitations.
+
+## B2 S3 storage adapter — 2026-09-24
+
+R09 **PASS** for a locally tested adapter only. S3 object keys are generated
+from owner/document IDs, upload requests ask for AES-256 server-side encryption,
+and the adapter does not set public ACLs. Fake-client tests verify calls,
+round-trip bytes and failure propagation. No bucket was created or contacted;
+private bucket policy, Block Public Access and IAM are still unverified and must
+be completed before a live deployment. See `docs/progress.md` for the exact
+boundary and tests.

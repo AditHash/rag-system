@@ -260,4 +260,45 @@ which later owner-scoped database queries can use. Does the 10 MiB check stop a
 large multipart body from reaching the process? Not yet; it checks the parsed
 file bytes, and B8 must enforce a streaming request cap.
 
-Next: **B2 — S3 repository**. Stop here for candidate review before proceeding.
+Next: **B2 — S3 repository**; completion details follow.
+
+## B2 — S3 document storage adapter
+
+Date: 2026-09-24. Status: **PASS** for fake-client adapter checks. Assessment
+trace: p3 storage/security guidance (R09); S3 and the object-key shape are
+selected architecture choices.
+
+`backend/src/storage.py` adds `S3DocumentStore.put_document` and
+`get_document`. The bucket comes from `S3_BUCKET`; boto3 uses its environment and
+standard credential chain, and the region comes from `AWS_REGION`. Keys are
+generated as `documents/{owner_id}/{document_id}` using a validated owner ID and
+UUID; client filenames never enter the key. Uploads include content type and
+request AES-256 server-side encryption, without a public ACL. Reads close the
+response body and return the stored bytes. AWS/client errors propagate for the
+caller to handle; no error is silently treated as success.
+
+Validation (commands run from `backend/`):
+
+- `uv run --frozen ruff check .`: passed.
+- `uv run --frozen ruff format --check .`: passed, 13 files formatted.
+- `uv run --frozen pytest -q`: **15 passed, 1 skipped**, with two existing
+  Starlette/anyio deprecation warnings. Fake client checks covered key scoping,
+  payload/type/encryption arguments, absence of ACL, readback, missing bucket,
+  invalid input, and S3 exception propagation.
+- No S3 network request was made and no bucket was created; therefore the
+  account's bucket policy, Block Public Access settings, and IAM permissions are
+  unverified.
+
+Tradeoff: S3 holds original bytes while PostgreSQL will hold searchable metadata
+and chunks. Deterministic owner/document keys make retries overwrite the same
+object and avoid trusting filenames. AES-256 is requested per upload, while
+public-access prevention and least-privilege access remain bucket/account policy
+responsibilities. No delete operation was added because document lifecycle and
+cleanup semantics are not implemented yet.
+
+Walkthrough: Where is source document content stored? In S3, while PostgreSQL
+stores metadata and later extracted chunks. Does this adapter itself make a
+bucket private? No; it avoids public ACLs and requests encryption, but bucket
+Block Public Access and IAM policies must be configured separately.
+
+Next: **B3 — Text extraction**.

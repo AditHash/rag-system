@@ -201,3 +201,14 @@ vectors verified ordering and the distance-to-similarity transform; integration
 excluded foreign-owner, failed and unready documents. The HNSW index is present
 but index use, recall, and latency at scale are not measured. This repository
 function is not yet wired into chat. See `docs/progress.md` for exact validation.
+
+## C3 optional reranker — 2026-09-24
+
+Optional R02 ranking enhancement **PASS** for local adapter behavior. The
+Bedrock Agent Runtime adapter sends the bounded query/candidate set and maps
+returned indexes to original server-held candidates. It explicitly marks
+pass-through fallback and omits rerank scores when the provider fails. Fake
+tests validate request shape and failure handling; this increment made no live
+Bedrock call. Account/model capability was separately verified under A2. The
+reranker remains optional and must be compared in the actual evaluation before
+production use.

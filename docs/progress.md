@@ -711,6 +711,61 @@ supported.
 
 Next: **C3 — Optional reranker adapter**, then C4 evidence/refusal gate.
 
+## C3 — Optional Bedrock reranker
+
+Date: 2026-09-24. Status: **PASS** for fake-client adapter and fallback
+contracts. Assessment trace: p1 improves relevance as a possible retrieval
+technique; reranking is optional and is our selected design choice. Cohere
+Rerank 3.5 capability was verified earlier under the authorized work profile;
+this task made no live inference call.
+
+`backend/src/reranking.py` uses the Bedrock Agent Runtime `rerank` operation,
+not the model-generation `InvokeModel` request shape. It sends exactly one text
+query and at most 20 candidate chunks, maps returned indexes back to the
+server-held `RetrievalCandidate` objects, and exposes the model's relevance score
+under that name without treating it as calibrated confidence. Result count is
+bounded to 1–20 (default 5). The model ARN is constructed from the configured
+model ID and `BEDROCK_RERANKER_REGION`; this region defaults to `us-east-1`
+separately from `AWS_REGION` because model capabilities differ by region. The
+client has bounded connect/read timeouts and disables SDK retries.
+
+`rerank_candidates` returns an explicit `reranked` flag. If the adapter returns a
+sanitized provider error or malformed indexes/scores, it returns the original
+top candidates in retrieval order, with `relevance_score=None` and
+`fallback_reason="provider_error"`. It never passes provider error text to the
+API. Empty candidate input makes no request; blank query and invalid oversized
+inputs fail validation.
+
+Validation (commands run from `backend/`):
+
+- `uv run --frozen ruff check .`: passed.
+- `uv run --frozen ruff format --check .`: **32 files already formatted**.
+- `uv run --frozen pytest -q`: **74 passed, 1 skipped**, two existing
+  Starlette/anyio deprecation warnings.
+- Unit tests use only fake model clients; they verify the Bedrock operation
+  payload/region ARN, index mapping, ranking order, score field, empty input,
+  request bounds, provider failure fallback, and malformed-index fallback. No
+  paid reranking call or other AWS request was made.
+- `git diff --check`: passed.
+
+Security/cost: only retrieved candidate text and the query are sent to Bedrock
+when this optional adapter is invoked; deployment therefore needs explicit
+cross-account permission for the Agent Runtime rerank action and the supported
+model region. The adapter is optional and was not called by these tests.
+
+Tradeoff: reranking can improve ordering after vector recall but adds an extra
+model request, latency, and inference cost. It only sees the initial candidates
+and cannot recover a relevant chunk omitted by vector search. Failure falls
+back to vector order with no false score claim. The actual effect must be
+measured in the evaluation set before keeping it enabled in production.
+
+Walkthrough: Why is the score field called `relevance_score`, not probability?
+The API labels it as the model output; it is not calibrated for answer truth.
+What happens if AWS denies reranking? The caller gets a marked pass-through in
+the original cosine order, and there is no made-up rerank score.
+
+Next: **C4 — Pre-generation evidence/refusal gate**.
+
 ## A1 runtime command follow-up — 2026-09-24
 
 Status: **PASS** locally. The backend adds `backend/main.py` so `uv run main.py`

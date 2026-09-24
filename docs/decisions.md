@@ -149,3 +149,17 @@ metadata for later citations. Default candidate count is 10, clamped to 1–20.
 The similarity value is only a ranking signal; C4 must define a separately
 evaluated evidence gate. HNSW can accelerate larger corpora, but small-corpus
 performance and index recall need measurements before tuning.
+
+## C3 optional reranking — 2026-09-24
+
+Use Cohere Rerank 3.5 through the Bedrock Agent Runtime `rerank` operation
+([API contract](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_agent-runtime_Rerank.html))
+in its independently configured region (default `us-east-1`, which the AWS
+[supported-regions table](https://docs.aws.amazon.com/bedrock/latest/userguide/rerank-supported.html)
+lists for Cohere Rerank 3.5). Start with at most
+the top 10 vector candidates and keep 5 after reranking. Preserve the original
+candidate object by response index; only attach the returned relevance score
+when reranking succeeded. On a provider or response error, pass through the
+top candidates in vector order with no rerank score and an explicit fallback
+flag. This costs an additional model request and cannot improve recall when
+vector retrieval missed the evidence; evaluation may justify disabling it.

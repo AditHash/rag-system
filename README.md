@@ -85,9 +85,11 @@ principal.
 Bedrock model IDs are set in `backend/src/config.py` and can be overridden with
 `BEDROCK_EMBEDDING_MODEL_ID`, `BEDROCK_CHAT_MODEL_ID`,
 `BEDROCK_THINKING_MODEL_ID`, and `BEDROCK_RERANKER_MODEL_ID`. AWS region and
-credentials come from environment variables. `backend/.env.example` lists the
-variable names only; supply real credentials through local environment or a
-secret store.
+credentials come from environment variables. The reranker has a separate
+`BEDROCK_RERANKER_REGION` setting (default `us-east-1`) because model regions
+can differ from embedding and generation regions. `backend/.env.example` lists
+the variable names only; supply real credentials through local environment or
+a secret store.
 
 `backend/src/storage.py` uses the standard boto3 credential chain, including AWS
 credential environment variables, and reads the bucket name from `S3_BUCKET`.
@@ -145,6 +147,14 @@ page, chunk ordinal/text, cosine distance, and `similarity = 1 - distance`.
 Similarity is a ranking value, not a calibrated probability that an answer is
 correct. This repository function is tested locally but is not yet connected to
 a chat route.
+
+`backend/src/reranking.py` optionally sends the top retrieval candidates to the
+Bedrock `bedrock-agent-runtime.rerank` API, then maps returned indexes back to
+the original server-held candidates. On a sanitized provider/response failure,
+it returns the original top candidates with no fabricated rerank scores and
+marks the outcome as a fallback. Reranker relevance scores are only model
+rankings, not answer confidence. No live reranking call is made by the normal
+test suite.
 
 To run the database migration check, provide an empty, disposable local database
 whose name begins with `a3_test`:

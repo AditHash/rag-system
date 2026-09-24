@@ -15,6 +15,7 @@ def test_model_ids_can_be_overridden_by_environment() -> None:
             "BEDROCK_CHAT_MODEL_ID": "chat-test",
             "BEDROCK_THINKING_MODEL_ID": "thinking-test",
             "BEDROCK_RERANKER_MODEL_ID": "reranker-test",
+            "BEDROCK_RERANKER_REGION": "reranker-region-test",
         },
     ):
         reload(config)
@@ -22,5 +23,6 @@ def test_model_ids_can_be_overridden_by_environment() -> None:
         assert config.BEDROCK_CHAT_MODEL_ID == "chat-test"
         assert config.BEDROCK_THINKING_MODEL_ID == "thinking-test"
         assert config.BEDROCK_RERANKER_MODEL_ID == "reranker-test"
+        assert config.BEDROCK_RERANKER_REGION == "reranker-region-test"
 
     reload(config)

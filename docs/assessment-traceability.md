@@ -212,3 +212,12 @@ tests validate request shape and failure handling; this increment made no live
 Bedrock call. Account/model capability was separately verified under A2. The
 reranker remains optional and must be compared in the actual evaluation before
 production use.
+
+## C4 pre-generation evidence gate — 2026-09-24
+
+R03 **PASS** for deterministic gate behavior. Empty results and candidates
+below the configurable cosine-similarity threshold return
+`INSUFFICIENT_CONTEXT` before generation. The initial `0.55` value is a
+heuristic only; it has not been calibrated and does not guarantee entailment.
+Ground-truth evaluation in D1/D2 must measure false accepts and false refusals.
+No external calls were made. See `docs/progress.md` for tests and limitations.

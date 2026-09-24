@@ -766,6 +766,57 @@ the original cosine order, and there is no made-up rerank score.
 
 Next: **C4 — Pre-generation evidence/refusal gate**.
 
+## C4 — Pre-generation evidence gate
+
+Date: 2026-09-24. Status: **PASS** for local deterministic heuristic tests.
+Assessment trace: p1 grounded answers and refusal of unsupported queries; R03.
+The PDF requires refusing unsupported questions; the cosine threshold and
+decision schema are our implementation choices.
+
+`backend/src/evidence.py:assess_evidence` receives the vector-retrieval
+candidates. With no candidates it returns `INSUFFICIENT_CONTEXT/NO_CANDIDATES`;
+when all candidate cosine similarities fall below the configured threshold it
+returns `INSUFFICIENT_CONTEXT/BELOW_THRESHOLD` and an empty candidate list.
+Otherwise, it returns `EVIDENCE_FOUND` with only candidates meeting the
+threshold. The initial threshold is `EVIDENCE_MIN_COSINE_SIMILARITY=0.55`, set
+in `config.py` or overridden by environment. Invalid threshold/scores fail
+closed with `ValueError`.
+
+This gate performs no generation call; C7 will branch on the decision and C8
+will return the stable refusal response. `EVIDENCE_FOUND` means a vector score
+cleared a heuristic gate; it does not establish that the source entails an
+answer. Threshold and relevance behavior must be evaluated with the real
+ground-truth set in D1/D2.
+
+Validation (commands run from `backend/`):
+
+- `uv run --frozen ruff check .`: passed.
+- `uv run --frozen ruff format --check .`: **34 files already formatted**.
+- `uv run --frozen pytest -q`: **81 passed, 1 skipped**, two existing
+  Starlette/anyio deprecation warnings.
+- Tests cover no candidates, weak low-similarity evidence,
+  threshold boundary, filtering weak candidates, and invalid thresholds/scores.
+  The injected input is deterministic; no Bedrock calls, DB access, or paid
+  AWS resources were used. `git diff --check`: passed.
+
+Security/cost: weak/empty evidence can be stopped before a paid generation
+request. The score threshold may still accept irrelevant text or reject a valid
+paraphrase; no zero-hallucination or calibrated-confidence guarantee is made.
+
+Tradeoff: one minimum-similarity threshold is small and explainable, but
+similarity is not answer probability and a single score cannot test claim
+entailment. A lexical coverage or verifier may improve handling but can add
+false refusals, provider cost, and complexity; only add such checks when the
+ground-truth evaluation demonstrates benefit. C6 still validates source IDs and
+citations.
+
+Walkthrough: What happens when no evidence is found? The gate returns
+`INSUFFICIENT_CONTEXT`, so the orchestrator will not call the generator. Does a
+score above `0.55` mean 55% confidence? No; it is cosine similarity used by a
+tunable heuristic, and the threshold is not yet calibrated.
+
+Next: **C5 — Context builder, strict prompt, and structured generator parser**.
+
 ## A1 runtime command follow-up — 2026-09-24
 
 Status: **PASS** locally. The backend adds `backend/main.py` so `uv run main.py`

@@ -148,6 +148,14 @@ Similarity is a ranking value, not a calibrated probability that an answer is
 correct. This repository function is tested locally but is not yet connected to
 a chat route.
 
+`backend/src/evidence.py` provides the pre-generation gate. It refuses when no
+candidate exists or when every cosine similarity is below
+`EVIDENCE_MIN_COSINE_SIMILARITY` (initial default `0.55`). This value is a
+starting heuristic, not an evaluation result or probability of correctness; it
+must be calibrated against the labeled evaluation questions. Passing this gate
+only permits generation to inspect evidence and does not itself prove that the
+evidence supports a particular claim.
+
 `backend/src/reranking.py` optionally sends the top retrieval candidates to the
 Bedrock `bedrock-agent-runtime.rerank` API, then maps returned indexes back to
 the original server-held candidates. On a sanitized provider/response failure,

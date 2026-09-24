@@ -163,3 +163,13 @@ when reranking succeeded. On a provider or response error, pass through the
 top candidates in vector order with no rerank score and an explicit fallback
 flag. This costs an additional model request and cannot improve recall when
 vector retrieval missed the evidence; evaluation may justify disabling it.
+
+## C4 evidence gate — 2026-09-24
+
+Before generation, require at least one retrieved candidate whose vector cosine
+similarity meets configurable threshold `0.55`; otherwise return
+`INSUFFICIENT_CONTEXT` with no evidence passed downstream. This is a cautious,
+simple starting threshold, not a probability or proof of entailment. D1/D2 must
+measure false refusals and false accepts on human-reviewed answerable and
+unanswerable questions and adjust the threshold. Citation validation and
+claim/evidence support remain separate steps.

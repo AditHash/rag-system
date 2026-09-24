@@ -124,3 +124,27 @@ One minimal invocation per model was attempted again. Embedding and generation b
 returned `ValidationException: Operation not allowed`. No model output was received,
 and no credentials or response content were logged. Status remains **BLOCKED:
 LIVE-BEDROCK**. The separate bearer API key remains untested.
+
+## A2 work-account verification — 2026-09-24
+
+Status: **PASS — live Bedrock capabilities verified**.
+
+The authenticated `work-bedrock` profile returned account `451058046921` and the
+assumed role `Workmates-SSO-AdminRole`. Region `ap-south-1` was used for models;
+reranking used `us-east-1` because that is a supported Cohere Rerank 3.5 region.
+
+Checks:
+
+- Foundation-model catalog: passed, 81 entries.
+- Titan V2 `amazon.titan-embed-text-v2:0`: passed; one short input returned a
+  1,024-dimensional vector.
+- Qwen3 `qwen.qwen3-32b-v1:0`: passed; short Converse request.
+- GPT-OSS `openai.gpt-oss-20b-1:0`: passed; short Converse request.
+- Cohere `cohere.rerank-v3-5:0`: passed; two short documents, relevant result first.
+
+Only bounded test calls were made. Credentials and response text were not logged.
+These were real model calls and may incur small inference charges. The old CSV
+account remains invocation-blocked; the work profile is the usable Bedrock path.
+
+Next after review: **A3 — Database schema and migration**. Keep implementation
+small: plain SQL, small functions, and direct tests. No source files changed here.

@@ -71,3 +71,9 @@ Selected stack: Titan Text Embeddings V2 (1,024 dimensions), Qwen3 32B for norma
 generation, GPT-OSS 20B for routed complex questions, and Cohere Rerank 3.5 for
 optional candidate reranking. These are design selections, not live-access
 evidence; the tested account still returns `Operation not allowed` for invocation.
+
+## A2 gate closed — 2026-09-24
+
+**PASS** using the authorized `work-bedrock` profile in account `451058046921`.
+Titan, Qwen3, GPT-OSS and Cohere reranking each passed a bounded real call. The
+earlier CSV account's invocation denial remains a separate limitation.

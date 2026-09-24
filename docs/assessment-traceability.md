@@ -221,3 +221,13 @@ below the configurable cosine-similarity threshold return
 heuristic only; it has not been calibrated and does not guarantee entailment.
 Ground-truth evaluation in D1/D2 must measure false accepts and false refusals.
 No external calls were made. See `docs/progress.md` for tests and limitations.
+
+## C5 grounded generation — 2026-09-24
+
+R03/R04/R05 **PASS** for local prompt/parser and mocked Converse adapter. The
+prompt serializes server-assigned source IDs and text, marks source text as
+untrusted, and requests a strict answer/refusal JSON schema. Output tokens are
+bounded; malformed responses fail closed. Tests use a fake client, with no live
+Bedrock inference. Citation-ID existence and source metadata binding remain
+C6 responsibilities; prompt instructions alone do not ensure factual support.
+See `docs/progress.md` for exact validation.

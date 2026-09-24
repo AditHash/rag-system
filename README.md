@@ -164,6 +164,17 @@ marks the outcome as a fallback. Reranker relevance scores are only model
 rankings, not answer confidence. No live reranking call is made by the normal
 test suite.
 
+`backend/src/generation.py` assigns server-side IDs (`S1`, `S2`, …) to each
+candidate and serializes only those IDs and chunk text into the model context.
+The prompt tells the model that documents are untrusted data and forbids
+outside knowledge, invented source IDs, metadata, or hidden reasoning. The
+Bedrock Converse adapter bounds output to 1,024 tokens and parses exactly
+`status`, `answer`, and `cited_source_ids`; malformed JSON or upstream errors
+fail closed. The parser does not yet verify that cited IDs belong to retrieved
+evidence or prove claim support—that is the separate C6 stage. Qwen3 32B is the
+normal model and GPT-OSS 20B is available for the later thinking-mode router.
+No live generation call runs in regular tests.
+
 To run the database migration check, provide an empty, disposable local database
 whose name begins with `a3_test`:
 

@@ -173,3 +173,14 @@ simple starting threshold, not a probability or proof of entailment. D1/D2 must
 measure false refusals and false accepts on human-reviewed answerable and
 unanswerable questions and adjust the threshold. Citation validation and
 claim/evidence support remain separate steps.
+
+## C5 grounded generation — 2026-09-24
+
+Use Bedrock Converse with the selected model ID and a bounded 1,024-token
+response. Give the model JSON-escaped question and evidence text identified by
+server-assigned source IDs; keep filenames/pages server-side. Request exactly
+`status`, `answer`, and `cited_source_ids`, and reject invalid JSON rather than
+trying to repair it. Treat document text as untrusted instructions, but do not
+assume the prompt prevents injection. Citation ID binding and citation-source
+assembly remain server responsibilities in C6. Do not log query, evidence or
+model response.

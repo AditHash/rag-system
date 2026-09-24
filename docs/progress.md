@@ -817,6 +817,62 @@ tunable heuristic, and the threshold is not yet calibrated.
 
 Next: **C5 — Context builder, strict prompt, and structured generator parser**.
 
+## C5 — Grounded prompt and structured generation adapter
+
+Date: 2026-09-24. Status: **PASS** for deterministic fake-client behavior.
+Assessment trace: p1 answer from evidence, unsupported-query refusal, and safe
+source use; R03/R04/R05. Using Bedrock Converse, Qwen/GPT-OSS, JSON source
+serialization and the exact response schema are architecture choices.
+
+`backend/src/generation.py:build_grounded_prompt` assigns request-local source
+IDs (`S1`, `S2`, …), then serializes the question and only the IDs plus chunk
+text as JSON. Filenames, pages, owner IDs and other citation metadata stay on
+the server. The system instruction limits answers to evidence, treats every
+document as untrusted data, rejects embedded commands, asks for no hidden
+reasoning, and requests exactly `status`, `answer`, `cited_source_ids`.
+Question, source count, context characters and output size are bounded.
+
+`BedrockGenerator.generate` calls Converse once with the selected model ID,
+temperature 0.1 and a 1,024-token output cap. It parses text blocks only and
+returns optional token counts when present. `parse_generated_answer` accepts
+only a strict JSON object with the exact keys and known status values; markdown,
+malformed content, duplicate IDs, empty answers, and inconsistent refusal
+citations fail with sanitized `GenerationError`. An ANSWERED result may still
+contain a missing or unknown source ID; C6 owns the server-side citation check.
+The adapter does not retry a generation failure, avoiding hidden repeated
+inference charges.
+
+Validation (commands run from `backend/`):
+
+- `uv run --frozen ruff check .`: passed.
+- `uv run --frozen ruff format --check .`: **36 files already formatted**.
+- `uv run --frozen pytest -q`: **98 passed, 1 skipped**, two existing
+  Starlette/anyio deprecation warnings.
+- Fake-client tests cover context escaping with an injected instruction,
+  server-only metadata, input bounds, supported/refusal response schemas,
+  malformed JSON/fields/status, duplicate IDs, Converse request/model/token
+  bounds, malformed response and usage, and sanitized upstream failure. No AWS
+  request or paid generation call was made. `git diff --check`: passed.
+
+Security/cost: the prompt makes documents untrusted and refuses to request
+hidden reasoning, but prompts are not a security boundary by themselves.
+Structured output and later server-side ID binding are required; text may still
+be unsupported despite valid JSON. Generation costs one bounded model request;
+the evidence gate must run first.
+
+Tradeoff: the common Converse API keeps Qwen and GPT-OSS invocation simple, and
+strict JSON makes parsing predictable. Prompt-only schema adherence can fail;
+the parser then stops the answer rather than trying to salvage prose. A native
+structured-output feature could improve reliability if supported by both
+selected models and the account, but would add model-specific behavior.
+
+Walkthrough: Why send IDs and evidence text but not filenames/pages? The model
+can select evidence IDs, while the service must bind original citation metadata
+from trusted DB rows. Does valid JSON guarantee a grounded claim? No; C6 checks
+IDs and source assembly, and evaluation still measures factual support.
+
+Next: **C6 — Server-side citation validation and source assembly**.
+
 ## A1 runtime command follow-up — 2026-09-24
 
 Status: **PASS** locally. The backend adds `backend/main.py` so `uv run main.py`

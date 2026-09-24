@@ -3,9 +3,9 @@ requires = ["hatchling==1.29.0"]
 build-backend = "hatchling.build"
 
 [project]
-name = "document-qa-api"
+name = "enterprise-rag-backend"
 version = "0.1.0"
-description = "Document Q&A API"
+description = "Backend for an enterprise-grade RAG system"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "fastapi==0.141.1",

@@ -1,1 +1,1 @@
-"""Document Q&A service."""
+"""Enterprise RAG backend."""

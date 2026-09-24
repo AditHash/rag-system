@@ -14,7 +14,7 @@ class HealthResponse(BaseModel):
 
 def create_app() -> FastAPI:
     """Build an independent application instance for serving or testing."""
-    app = FastAPI(title="Document Q&A API", version="0.1.0")
+    app = FastAPI(title="Enterprise RAG API", version="0.1.0")
 
     @app.get("/health", response_model=HealthResponse, tags=["health"])
     def health() -> HealthResponse:

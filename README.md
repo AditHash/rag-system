@@ -1,9 +1,14 @@
-# Document Q&A API
+# Enterprise RAG Platform
 
-A small FastAPI service being built in reviewable steps. It currently provides a
-health endpoint and the first PostgreSQL/pgvector schema migration. Document
-upload, authentication, retrieval, grounded answers, and cloud deployment are
-not implemented yet.
+This repository is the backend foundation for an enterprise-grade retrieval-
+augmented generation (RAG) system. Document Q&A is one capability within that
+system. The selected architecture is FastAPI, private S3, PostgreSQL/pgvector,
+Amazon Bedrock, and ECS Fargate. These describe the target; they are not all
+implemented or deployed yet.
+
+The current backend provides a health endpoint and the first PostgreSQL/pgvector
+schema migration. Document upload, authentication, retrieval, grounded answer
+generation, and cloud deployment remain to be implemented.
 
 ## Local development
 
@@ -100,8 +105,8 @@ start`.
 
 ```bash
 cd backend
-docker build -t document-qa:local .
-docker run --rm --name document-qa -p 127.0.0.1:8000:8000 document-qa:local
+docker build -t enterprise-rag:local .
+docker run --rm --name enterprise-rag -p 127.0.0.1:8000:8000 enterprise-rag:local
 ```
 
 The container runs as UID/GID 10001. It serves only the health endpoint at this

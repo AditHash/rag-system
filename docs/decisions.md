@@ -5,6 +5,7 @@ Recorded at A0, 2026-09-20. These are selected design directions, not implemente
 | Decision | Reason and tradeoff | State |
 |---|---|---|
 | Follow PDF outcomes and plan task order; stop after each task | Keeps increments reviewable and defensible; adds explicit review checkpoints | Active workflow |
+| Present the project as an enterprise-grade RAG system | Document Q&A is a core capability; the broader system includes ingestion, retrieval, grounded generation and deployment | Target framing; implementation remains incremental |
 | ECS Fargate + FastAPI | User-selected container API; greater control over runtime/worker lifecycle than Lambda, with idle cost and networking overhead | Selected, not built |
 | Private S3 + PostgreSQL/pgvector | Raw documents in object storage; transactional metadata/vectors in PostgreSQL | Selected; PostgreSQL will run on EC2, with `DATABASE_URL` supplied to the backend through environment configuration. No EC2 resources provisioned |
 | Amazon Bedrock through separately authorized account credentials | Matches user access situation; adds auth, ownership and billing boundaries | Bounded work-account probes passed in A2; deployed ECS credential path remains unimplemented |

@@ -9,8 +9,9 @@ implemented or deployed yet.
 The current backend provides a health endpoint and an authenticated one-file
 ingestion endpoint. It stores the upload in S3, creates a PostgreSQL job, and
 returns `202 PENDING` before background extraction, chunking, embedding, and
-index persistence run. Status lookup, retrieval, grounded answer generation,
-and cloud deployment remain to be implemented.
+index persistence run. An authenticated status endpoint reports persisted job
+state and document IDs. Retrieval, grounded answer generation, and cloud
+deployment remain to be implemented.
 
 ## Local development
 
@@ -68,6 +69,19 @@ a restart and is not durable queue delivery. A real ingestion needs a configured
 endpoint tests replace those providers with fakes. Question input is capped at
 4,000 characters for the planned chat endpoint.
 
+Poll the job with the returned `ingestion_id`:
+
+```bash
+curl --fail --silent --show-error \
+  -H "X-API-Key: $API_KEY" \
+  "http://127.0.0.1:8000/api/v1/ingest/$INGESTION_ID/status"
+```
+
+The status response includes `status`, current `stage`, completed/total document
+counts, document IDs and a sanitized error when the job fails. Unknown and
+other-owner IDs both return 404. In this demo, the single API key represents one
+principal.
+
 Bedrock model IDs are set in `backend/src/config.py` and can be overridden with
 `BEDROCK_EMBEDDING_MODEL_ID`, `BEDROCK_CHAT_MODEL_ID`,
 `BEDROCK_THINKING_MODEL_ID`, and `BEDROCK_RERANKER_MODEL_ID`. AWS region and
@@ -107,8 +121,9 @@ transactions short around external I/O. A failed stage stores only the stage
 name and marks the document `FAILED`; retrying a completed job returns its
 stored chunk count without repeating inference, and an atomic claim rejects
 simultaneous processing attempts. A worker left in `PROCESSING` after process
-termination currently needs recovery. The status route and durable queue remain
-pending.
+termination currently needs recovery. The status route reads these persisted
+states after a process restart, although the in-process task itself is not
+durable and can leave a job stuck in `PROCESSING`.
 
 `backend/src/embedding.py` contains the Bedrock Titan V2 adapter. It uses the
 same model and fixed 1,024 dimensions for document and query embeddings, validates

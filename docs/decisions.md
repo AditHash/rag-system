@@ -120,3 +120,12 @@ if the client omits `Content-Length`. This small path avoids blocking on
 embedding but is not durable: process termination can interrupt indexing. SQS
 and a separate ECS worker are an option if the demo needs durable delivery and
 budget/time allow; do not describe the current behavior as queued or durable.
+
+## B9 ingestion status response — 2026-09-24
+
+Scope status SQL by both `ingestion_id` and the owner returned from API-key
+authentication. Return the same 404 for unknown and other-owner IDs to avoid
+revealing job existence. Report persisted completed/total document counts rather
+than a made-up percentage. Status is durable because PostgreSQL stores it; the
+current background execution is not durable, so a restart can leave a persisted
+job in `PROCESSING` until recovery is implemented.

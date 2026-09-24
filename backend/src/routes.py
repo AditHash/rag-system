@@ -23,6 +23,7 @@ from src.ingestion import (
     mark_job_failed,
     process_job,
 )
+from src.job_repository import get_job_status
 from src.storage import S3DocumentStore
 from src.validation import MAX_UPLOAD_BYTES, validate_upload
 
@@ -51,6 +52,20 @@ class IngestAcceptedResponse(BaseModel):
     ingestion_id: UUID
     document_ids: list[UUID]
     status: Literal["PENDING"]
+
+
+class IngestionProgress(BaseModel):
+    completed_documents: int
+    total_documents: int
+
+
+class IngestionStatusResponse(BaseModel):
+    ingestion_id: UUID
+    document_ids: list[UUID]
+    status: Literal["PENDING", "PROCESSING", "COMPLETED", "FAILED"]
+    stage: str
+    progress: IngestionProgress
+    error: str | None
 
 
 class RequestBodyTooLarge(Exception):
@@ -216,6 +231,37 @@ def ingest_document(
         ingestion_id=created.job_id,
         document_ids=[created.document_id],
         status="PENDING",
+    )
+
+
+@router.get(
+    "/api/v1/ingest/{ingestion_id}/status",
+    response_model=IngestionStatusResponse,
+    tags=["ingestion"],
+)
+def read_ingestion_status(
+    ingestion_id: UUID,
+    owner_id: Annotated[str, Depends(verify_api_key)],
+    dependencies: Annotated[IngestionDependencies, Depends(get_ingestion_dependencies)],
+) -> IngestionStatusResponse:
+    """Return status only when the job belongs to the authenticated owner."""
+    try:
+        with dependencies.connection_factory() as connection:
+            job = get_job_status(connection, owner_id, ingestion_id)
+    except psycopg.Error:
+        raise HTTPException(status_code=503, detail="Ingestion database is unavailable") from None
+    if job is None:
+        raise HTTPException(status_code=404, detail="Ingestion job not found")
+    return IngestionStatusResponse(
+        ingestion_id=job.ingestion_id,
+        document_ids=job.document_ids,
+        status=job.status,
+        stage=job.stage,
+        progress=IngestionProgress(
+            completed_documents=job.completed_documents,
+            total_documents=job.total_documents,
+        ),
+        error=job.error,
     )
 
 

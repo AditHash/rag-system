@@ -15,13 +15,18 @@ def test_health_contract() -> None:
     assert response.headers["content-type"] == "application/json"
 
 
-def test_health_and_ingest_routes_are_exposed_in_openapi() -> None:
+def test_health_and_ingestion_routes_are_exposed_in_openapi() -> None:
     with TestClient(create_app()) as client:
         schema = client.get("/openapi.json").json()
         assert client.post("/api/v1/chat", json={"question": "hello"}).status_code == 404
-    assert set(schema["paths"]) == {"/health", "/api/v1/ingest"}
+    assert set(schema["paths"]) == {
+        "/health",
+        "/api/v1/ingest",
+        "/api/v1/ingest/{ingestion_id}/status",
+    }
     assert "200" in schema["paths"]["/health"]["get"]["responses"]
     assert "202" in schema["paths"]["/api/v1/ingest"]["post"]["responses"]
+    assert "200" in schema["paths"]["/api/v1/ingest/{ingestion_id}/status"]["get"]["responses"]
 
 
 def test_main_uses_configured_worker_count(monkeypatch) -> None:

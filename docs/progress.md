@@ -550,6 +550,63 @@ request memory.
 Next: **B9 — Scoped ingestion status endpoint**. User authorized continuous
 work; the previous per-task review stop is waived for this run.
 
+## B9 — Scoped ingestion status endpoint
+
+Date: 2026-09-24. Status: **PASS** for local HTTP contract and PostgreSQL
+owner-scope integration. Assessment trace: p1 ingestion status and p2 secure
+API; R02/R08. Persisting status is part of the selected job design; a dedicated
+HTTP route is our implementation choice.
+
+`GET /api/v1/ingest/{ingestion_id}/status` requires the same API key as upload.
+`backend/src/job_repository.py:get_job_status` selects the job only where both
+the requested UUID and authenticated `owner_id` match, and returns associated
+document IDs, status, stage, completed/total counts, and the already-sanitized
+error. The route maps unknown and cross-owner jobs to the same 404 envelope and
+database failures to a sanitized 503. The response progress is counts, not a
+percentage estimate. Status remains readable from PostgreSQL after an API
+process restart; that does not make the in-process ingestion task durable.
+
+Flow: path UUID + API key → owner-scoped query → typed status JSON. Invalid UUIDs
+are rejected by FastAPI validation; missing/cross-owner IDs are indistinguishable
+404s; connection/query errors return 503. Output has `status`, `stage`,
+`progress.completed_documents`, `progress.total_documents`, `document_ids`, and
+nullable sanitized `error`.
+
+Validation (commands run from `backend/`):
+
+- `uv run --frozen ruff check .`: passed.
+- `uv run --frozen ruff format --check .`: 26 files already formatted.
+- `uv run --frozen pytest -q`: **51 passed, 1 skipped**, two existing
+  Starlette/anyio deprecation warnings.
+- With disposable `pgvector/pgvector:pg18` database `a3_test_b9`,
+  `A3_TEST_DATABASE_URL=... uv run --frozen pytest -q`: **52 passed**. The DB
+  integration verified a job returns its expected state/document ID to its
+  owner and returns no result for another owner. Temporary DB container stopped
+  and removed.
+- API tests cover all four statuses, response fields, API-key enforcement,
+  unknown/cross-owner 404 behavior, sanitized database failure, and OpenAPI.
+  `git diff --check`: passed.
+- No AWS calls, resources, or Bedrock inference were made.
+
+Security/cost: status lookup is scoped in SQL rather than relying on the
+`ready_chunks` view or hiding IDs in the client. A single shared key remains a
+demo authentication limitation. PostgreSQL reads add no AWS spend; no cloud
+service was contacted.
+
+Tradeoff: count-based progress is honest for the current one-document job and
+does not imply a percentage of work completed. More detailed per-stage or
+per-chunk progress would require additional persisted state and writes. Job
+status can survive an API restart, but a `PROCESSING` job may still need
+recovery because B8 uses in-process execution.
+
+Walkthrough: Can one caller see another owner's job by guessing its UUID? No;
+the owner is included in the database predicate, and both absent and
+unauthorized IDs return 404. Does persisted status prove the worker survived a
+restart? No; only status persists. The background work can stop while status
+remains `PROCESSING`.
+
+Next: **C1 — Retrieval repository and owner-scoped cosine search**.
+
 ## A1 runtime command follow-up — 2026-09-24
 
 Status: **PASS** locally. The backend adds `backend/main.py` so `uv run main.py`

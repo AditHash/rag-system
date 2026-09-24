@@ -18,6 +18,7 @@ from src.ingestion import (
     create_job,
     process_job,
 )
+from src.job_repository import get_job_status
 
 
 def test_connection_url_comes_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -273,6 +274,7 @@ def _check_ingestion_orchestrator(
     connection: psycopg.Connection,
     database_url: str,
 ) -> None:
+    _check_owner_scoped_job_status(connection)
     store = FakeDocumentStore()
     successful_job = _create_text_job(connection, "pipeline.txt")
     store.content_by_document[successful_job.document_id] = b"A fact for the test corpus."
@@ -334,6 +336,32 @@ def _check_ingestion_orchestrator(
     retried = process_job(connection_factory, store, retrying_embedder, "owner-a", retry_job.job_id)
     assert retried.status == "COMPLETED"
     assert retrying_embedder.calls == 2
+
+
+def _check_owner_scoped_job_status(connection: psycopg.Connection) -> None:
+    job = create_job(
+        connection,
+        owner_id="owner-status",
+        original_filename="status.txt",
+        s3_key=f"documents/owner-status/{uuid4()}",
+        checksum_sha256="d" * 64,
+        content_type="text/plain",
+        byte_size=4,
+    )
+    connection.commit()
+
+    own_status = get_job_status(connection, "owner-status", job.job_id)
+    hidden_status = get_job_status(connection, "different-owner", job.job_id)
+
+    assert own_status is not None
+    assert own_status.ingestion_id == job.job_id
+    assert own_status.document_ids == [job.document_id]
+    assert own_status.status == "PENDING"
+    assert own_status.stage == "PENDING"
+    assert own_status.completed_documents == 0
+    assert own_status.total_documents == 1
+    assert own_status.error is None
+    assert hidden_status is None
 
 
 def _create_text_job(connection: psycopg.Connection, filename: str) -> IngestionIds:

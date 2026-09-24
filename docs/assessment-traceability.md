@@ -172,3 +172,13 @@ multi-tenant authorization, and in-process background execution is not durable.
 No live AWS call or paid resource was used. The status endpoint and retrieval
 remain incomplete; see `docs/progress.md` for exact commands, outputs and
 failure handling.
+
+## B9 scoped ingestion status — 2026-09-24
+
+R02/R08 **PASS** locally. The authenticated status route returns persisted
+status, stage, count-based progress, document IDs and sanitized failure detail.
+Its PostgreSQL query filters by both job ID and principal; unknown and
+cross-owner IDs both return 404. Tests cover every job status and verify owner
+isolation against disposable local pgvector. Status persists across API process
+restarts, but B8 in-process task execution is not durable. No live AWS calls or
+resources were used. See `docs/progress.md` for exact test evidence.

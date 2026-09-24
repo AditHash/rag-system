@@ -4,9 +4,12 @@ import asyncio
 from contextlib import nullcontext
 from uuid import UUID
 
+import psycopg
+import pytest
 from fastapi.testclient import TestClient
 
 from src.ingestion import IngestionIds
+from src.job_repository import JobStatusRecord
 from src.main import create_app
 from src.routes import (
     MAX_INGEST_REQUEST_BYTES,
@@ -200,3 +203,82 @@ def test_request_limit_middleware_counts_chunked_body_without_content_length() -
 
     assert response_messages[0]["status"] == 413
     assert b'"code": "file_too_large"' in response_messages[1]["body"]
+
+
+@pytest.mark.parametrize("status", ["PENDING", "PROCESSING", "COMPLETED", "FAILED"])
+def test_status_endpoint_returns_persisted_progress_for_owner(monkeypatch, status: str) -> None:
+    app, _, _ = _configure_app(monkeypatch, FakeUploadStore())
+    job_id = UUID("d7144f3e-cc2c-47eb-9c58-4119d0dfecf2")
+    document_id = UUID("12189d10-dd26-4514-9400-9d29b3c186b0")
+    seen_owners: list[str] = []
+
+    def status_stub(_connection, owner_id, requested_id):
+        seen_owners.append(owner_id)
+        if owner_id != "demo-user" or requested_id != job_id:
+            return None
+        return JobStatusRecord(
+            ingestion_id=job_id,
+            document_ids=[document_id],
+            status=status,
+            stage="EMBEDDING" if status == "PROCESSING" else status,
+            completed_documents=1 if status == "COMPLETED" else 0,
+            total_documents=1,
+            error="Ingestion failed during embedding" if status == "FAILED" else None,
+        )
+
+    monkeypatch.setattr("src.routes.get_job_status", status_stub)
+    with TestClient(app) as client:
+        response = client.get(f"/api/v1/ingest/{job_id}/status", headers={"X-API-Key": "test-key"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body == {
+        "ingestion_id": str(job_id),
+        "document_ids": [str(document_id)],
+        "status": status,
+        "stage": "EMBEDDING" if status == "PROCESSING" else status,
+        "progress": {
+            "completed_documents": 1 if status == "COMPLETED" else 0,
+            "total_documents": 1,
+        },
+        "error": "Ingestion failed during embedding" if status == "FAILED" else None,
+    }
+    assert seen_owners == ["demo-user"]
+
+
+def test_status_endpoint_hides_unknown_and_other_owner_jobs(monkeypatch) -> None:
+    app, _, _ = _configure_app(monkeypatch, FakeUploadStore())
+    job_id = UUID("d7144f3e-cc2c-47eb-9c58-4119d0dfecf2")
+    owners: list[str] = []
+
+    def missing_job(_connection, owner_id, _requested_id):
+        owners.append(owner_id)
+        return None
+
+    monkeypatch.setattr("src.routes.get_job_status", missing_job)
+    with TestClient(app) as client:
+        missing = client.get(f"/api/v1/ingest/{job_id}/status", headers={"X-API-Key": "test-key"})
+        unauthorized = client.get(f"/api/v1/ingest/{job_id}/status")
+
+    assert missing.status_code == 404
+    assert missing.json()["error"]["code"] == "not_found"
+    assert unauthorized.status_code == 401
+    assert owners == ["demo-user"]
+
+
+def test_status_endpoint_sanitizes_database_failure(monkeypatch) -> None:
+    app, _, _ = _configure_app(monkeypatch, FakeUploadStore())
+
+    def unavailable(_connection, _owner_id, _requested_id):
+        raise psycopg.OperationalError("database host and private details")
+
+    monkeypatch.setattr("src.routes.get_job_status", unavailable)
+    with TestClient(app) as client:
+        response = client.get(
+            "/api/v1/ingest/d7144f3e-cc2c-47eb-9c58-4119d0dfecf2/status",
+            headers={"X-API-Key": "test-key"},
+        )
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "service_unavailable"
+    assert "private details" not in response.text

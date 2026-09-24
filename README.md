@@ -6,12 +6,11 @@ system. The selected architecture is FastAPI, private S3, PostgreSQL/pgvector,
 Amazon Bedrock, and ECS Fargate. These describe the target; they are not all
 implemented or deployed yet.
 
-The current backend provides a health endpoint, the first PostgreSQL/pgvector
-schema migration, shared API-key authentication helpers, request validators,
-S3 storage, PDF/TXT extraction, and deterministic chunking helpers. Ingestion
-orchestration and embeddings are implemented as local service components.
-Authenticated upload/status routes, retrieval, grounded answer generation, and
-cloud deployment remain to be implemented.
+The current backend provides a health endpoint and an authenticated one-file
+ingestion endpoint. It stores the upload in S3, creates a PostgreSQL job, and
+returns `202 PENDING` before background extraction, chunking, embedding, and
+index persistence run. Status lookup, retrieval, grounded answer generation,
+and cloud deployment remain to be implemented.
 
 ## Local development
 
@@ -57,12 +56,17 @@ be reachable over the private network. Do not put credentials in source control.
 The down migration removes the three tables and keeps the pgvector extension
 because other applications may use it.
 
-Application routes will use the `X-API-Key` header. Set `API_KEY` in the local
-environment before calling protected routes; the current auth helper maps a
-valid key to one demo principal, so it is not multi-tenant identity management.
-Question input is capped at 4,000 characters. Upload validation accepts PDF and
-UTF-8 TXT up to 10 MiB. Multipart request streaming and full PDF parsing checks
-will be added with the ingestion route and extraction tasks.
+`POST /api/v1/ingest` requires the `X-API-Key` header and one multipart field
+named `file`. Set `API_KEY` in the local environment; a valid key currently maps
+to one demo principal, so this is not multi-tenant identity management. The
+route accepts PDF or UTF-8 TXT up to 10 MiB and bounds the complete multipart
+body before parsing it. It validates and stores the upload, creates a persistent
+job, then schedules ingestion with FastAPI `BackgroundTasks`. A response means
+the job was accepted, not completed. This in-process task can be interrupted by
+a restart and is not durable queue delivery. A real ingestion needs a configured
+`S3_BUCKET`, `DATABASE_URL`, AWS credentials/role, and Bedrock access; local
+endpoint tests replace those providers with fakes. Question input is capped at
+4,000 characters for the planned chat endpoint.
 
 Bedrock model IDs are set in `backend/src/config.py` and can be overridden with
 `BEDROCK_EMBEDDING_MODEL_ID`, `BEDROCK_CHAT_MODEL_ID`,
@@ -95,14 +99,16 @@ parameters need evaluation against the target documents.
 transactions. A document remains hidden from `ready_chunks` until its owner-scoped
 READY transition confirms the expected chunk count.
 
-`backend/src/ingestion.py` connects the existing storage, extraction, chunking,
-embedding, and persistence functions for one document per job. Its database
-connection factory keeps transactions short around external I/O. A failed stage
-stores a stage-only error and marks the document `FAILED`; retrying a completed
-job returns its stored chunk count without repeating inference, and an atomic
-claim rejects simultaneous processing attempts. A worker left in `PROCESSING`
-after process termination currently needs manual retry/recovery. The API route
-and its in-process/queue execution model are still pending.
+`backend/src/ingestion.py` connects storage, extraction, chunking, embedding,
+and persistence for one document per job. The mounted ingestion route completes
+the S3 upload and job creation, returns `202 PENDING`, then starts embedding in
+FastAPI's in-process background task. Its database connection factory keeps
+transactions short around external I/O. A failed stage stores only the stage
+name and marks the document `FAILED`; retrying a completed job returns its
+stored chunk count without repeating inference, and an atomic claim rejects
+simultaneous processing attempts. A worker left in `PROCESSING` after process
+termination currently needs recovery. The status route and durable queue remain
+pending.
 
 `backend/src/embedding.py` contains the Bedrock Titan V2 adapter. It uses the
 same model and fixed 1,024 dimensions for document and query embeddings, validates
@@ -142,7 +148,8 @@ uv run --frozen ruff format --check .
 uv run --frozen pytest -q
 ```
 
-Regular tests make no AWS calls. The database migration test needs the explicit
+Regular tests make no AWS calls. Ingestion endpoint tests use fake S3, database,
+and embedding dependencies. The database migration test needs the explicit
 disposable database setting described above.
 
 ## Container
@@ -157,9 +164,9 @@ docker build -t enterprise-rag:local .
 docker run --rm --name enterprise-rag -p 127.0.0.1:8000:8000 enterprise-rag:local
 ```
 
-The container runs as UID/GID 10001. It serves only the health endpoint at this
-stage; auth and validation are reusable helpers, not wired to application routes
-yet. No AWS clients or database connections start at import time. No cloud
+The container runs as UID/GID 10001. It serves the health and authenticated
+ingestion routes. No AWS clients or database connections start at import time;
+ingestion clients are initialized lazily when the route is called. No cloud
 resources are created by local development or tests.
 
 The Docker image syncs locked runtime dependencies without installing/building

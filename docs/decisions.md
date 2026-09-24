@@ -109,3 +109,14 @@ single-document job with injected providers; durable execution and request
 idempotency belong to later endpoint/worker tasks. A conditional update claims
 only PENDING or FAILED jobs to prevent concurrent workers from processing one
 job; stuck PROCESSING recovery remains a worker/operations concern.
+
+## B8 ingestion HTTP endpoint — 2026-09-24
+
+Accept one multipart document at a time and create the job/document before
+uploading to S3. Return `202 PENDING` after storage succeeds, then use FastAPI's
+in-process `BackgroundTasks` for the existing ingestion service. Both the file
+and complete multipart request have strict size bounds; count body bytes even
+if the client omits `Content-Length`. This small path avoids blocking on
+embedding but is not durable: process termination can interrupt indexing. SQS
+and a separate ECS worker are an option if the demo needs durable delivery and
+budget/time allow; do not describe the current behavior as queued or durable.

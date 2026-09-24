@@ -482,6 +482,74 @@ Walkthrough: What prevents partial chunks from becoming searchable? The final tr
 
 Next: **B8 — Authenticated ingestion endpoint**.
 
+## B8 — Authenticated ingestion endpoint
+
+Date: 2026-09-24. Status: **PASS** for the local API contract using fake cloud
+providers and disposable PostgreSQL. Assessment trace: p1 ingestion flow and
+p2 validated/authenticated API; R02 and R08. The endpoint is a selected
+implementation detail; the assessment requires document ingestion and API
+security, not this exact route framework.
+
+`backend/src/routes.py` mounts `POST /api/v1/ingest`. It authenticates the
+request, accepts one PDF/TXT multipart file, sanitizes the basename, enforces a
+10 MiB file cap and a total-body cap (including requests without
+`Content-Length`), creates the persistent job/document records, uploads the
+object, and returns IDs with `202 PENDING`. The route then schedules
+`process_job` as a synchronous FastAPI background task. In production ASGI, the
+response is sent before that background task runs. The work shares the API
+process and is not durable; a restart can interrupt it. S3 upload and database
+job creation happen before the response. AWS clients are constructed lazily.
+
+Flow: multipart bytes → API-key owner → bounded input/type checks → persistent
+job and private S3 key → HTTP 202 → background extraction/chunk/embed/persist.
+Validation returns stable 413/415/422 errors; DB/storage configuration or
+operations fail with sanitized 503. On storage failure, the created job is
+marked failed. The middleware returns 400 for malformed content length and
+413 when the request body exceeds the cap.
+
+Files/functions: `backend/src/routes.py` defines the route, injected
+dependencies and body limiter; `backend/src/main.py` mounts them;
+`backend/src/ingestion.py` accepts stable IDs and exposes sanitized failure
+marking; `backend/src/storage.py` exposes deterministic object-key generation.
+README and OpenAPI tests now match the implemented route.
+
+Validation (from `backend/`):
+
+- `uv run --frozen ruff check .`: passed.
+- `uv run --frozen ruff format --check .`: 25 files already formatted.
+- `uv run --frozen pytest -q`: **45 passed, 1 skipped**, two existing
+  Starlette/anyio deprecation warnings.
+- With disposable `pgvector/pgvector:pg18` database
+  `a3_test_b8`, `A3_TEST_DATABASE_URL=... uv run --frozen pytest -q`:
+  **46 passed**. This also exercised the existing migration/ingestion DB
+  integration tests. The temporary database container was stopped and removed.
+- Route tests cover valid upload and queued call, API key rejection, unsupported
+  and malformed input, file/request caps, storage failure sanitization, and
+  chunked body size enforcement. S3 and embedding use fakes; no AWS request,
+  resource, or inference call was made. `git diff --check`: passed.
+
+Security/cost: no upload content or secret is returned in errors. The
+single-key auth maps to one demo principal, so this is not production identity
+or multi-tenant authorization. A configured bucket, DB, AWS credentials/role,
+and authorized Bedrock are required for real ingestion. No AWS spend occurred.
+
+Tradeoff: FastAPI `BackgroundTasks` keeps this API small and proves the 202
+request path, but it is not a queue and can lose work on process termination.
+SQS plus a separate ECS worker improves delivery/retry isolation at added
+resource and operational cost; durable queue choice remains conditional on the
+time/cost budget. The current route writes the object before returning 202,
+which avoids acknowledging an upload that was never stored but keeps S3 latency
+on the request path.
+
+Walkthrough: Why 202 instead of 200? The file and job have been accepted while
+the indexing work may still be running. Does this guarantee durable async
+execution? No; the in-process background task may be interrupted. Why cap the
+entire body as well as the file? Multipart boundaries and fields also consume
+request memory.
+
+Next: **B9 — Scoped ingestion status endpoint**. User authorized continuous
+work; the previous per-task review stop is waived for this run.
+
 ## A1 runtime command follow-up — 2026-09-24
 
 Status: **PASS** locally. The backend adds `backend/main.py` so `uv run main.py`

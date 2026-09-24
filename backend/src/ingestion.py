@@ -53,9 +53,11 @@ def create_job(
     content_type: str,
     byte_size: int,
     embedding_model: str = BEDROCK_EMBEDDING_MODEL_ID,
+    job_id: UUID | None = None,
+    document_id: UUID | None = None,
 ) -> IngestionIds:
     """Persist one pending job and its processing document metadata."""
-    ids = IngestionIds(job_id=uuid4(), document_id=uuid4())
+    ids = IngestionIds(job_id=job_id or uuid4(), document_id=document_id or uuid4())
     with connection.transaction():
         connection.execute(
             """
@@ -146,7 +148,7 @@ def process_job(
                 )
         return IngestionResult("COMPLETED", len(chunks))
     except Exception:
-        _mark_failed(connection_factory, owner_id, job_id, document_id, stage)
+        mark_job_failed(connection_factory, owner_id, job_id, document_id, stage)
         return IngestionResult("FAILED", 0, f"Ingestion failed during {stage.lower()}")
 
 
@@ -215,7 +217,7 @@ def _claim_job(
     raise IngestionAlreadyProcessingError("ingestion job is already processing")
 
 
-def _mark_failed(
+def mark_job_failed(
     connection_factory: Callable[[], psycopg.Connection],
     owner_id: str,
     job_id: UUID,

@@ -159,3 +159,16 @@ The test covered successful storage-to-READY processing, idempotent completed-jo
 re-entry, active-job duplicate rejection, sanitized mid-embedding failure, hidden chunks, and retry. No live S3
 or Bedrock call was made. Authenticated HTTP upload and durable async delivery
 remain later tasks. See `docs/progress.md` for exact results and limits.
+
+## B8 authenticated ingestion endpoint — 2026-09-24
+
+R02/R08 **PASS** for local API contract. `POST /api/v1/ingest` authenticates
+with the configured API key, accepts one bounded PDF/TXT multipart upload,
+persists a job, stores the object, and returns `202` before in-process
+background indexing. Request body limits cover both declared and chunked
+content. Tests use fakes for S3 and embeddings; database integration ran with a
+disposable local pgvector instance. This single demo principal is not
+multi-tenant authorization, and in-process background execution is not durable.
+No live AWS call or paid resource was used. The status endpoint and retrieval
+remain incomplete; see `docs/progress.md` for exact commands, outputs and
+failure handling.

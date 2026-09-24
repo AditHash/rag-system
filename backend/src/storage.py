@@ -37,7 +37,7 @@ class S3DocumentStore:
         if content_type not in _ALLOWED_CONTENT_TYPES:
             raise ValueError("only PDF and plain-text documents are supported")
 
-        key = self._key(owner_id, document_id)
+        key = self.key_for_document(owner_id, document_id)
         self.client.put_object(
             Bucket=self.bucket,
             Key=key,
@@ -52,7 +52,10 @@ class S3DocumentStore:
         if not _OWNER_ID_PATTERN.fullmatch(owner_id):
             raise ValueError("owner_id must contain only letters, numbers, hyphens, or underscores")
 
-        response = self.client.get_object(Bucket=self.bucket, Key=self._key(owner_id, document_id))
+        response = self.client.get_object(
+            Bucket=self.bucket,
+            Key=self.key_for_document(owner_id, document_id),
+        )
         body = response["Body"]
         try:
             return body.read()
@@ -62,5 +65,8 @@ class S3DocumentStore:
                 close()
 
     @staticmethod
-    def _key(owner_id: str, document_id: UUID) -> str:
+    def key_for_document(owner_id: str, document_id: UUID) -> str:
+        """Return the deterministic key for a validated owner and document ID."""
+        if not _OWNER_ID_PATTERN.fullmatch(owner_id):
+            raise ValueError("owner_id must contain only letters, numbers, hyphens, or underscores")
         return f"documents/{owner_id}/{document_id}"

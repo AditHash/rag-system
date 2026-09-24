@@ -4,91 +4,91 @@
     {
       "id": "readme.upload-limits",
       "path": "README.md",
-      "upload_filename": "README.txt",
+      "upload_filename": "rag-eval-README.txt",
       "match_text": "route accepts PDF or UTF-8 TXT up to 10 MiB and bounds the complete multipart"
     },
     {
       "id": "readme.ingestion-lifecycle",
       "path": "README.md",
-      "upload_filename": "README.txt",
+      "upload_filename": "rag-eval-README.txt",
       "match_text": "A response means the job was accepted, not completed. This in-process task can be interrupted by\na restart and is not durable queue delivery."
     },
     {
       "id": "readme.database-location",
       "path": "README.md",
-      "upload_filename": "README.txt",
+      "upload_filename": "rag-eval-README.txt",
       "match_text": "For deployment,\nthe URL will point to PostgreSQL on the user's EC2 instance; the database should\nbe reachable over the private network."
     },
     {
       "id": "readme.status-scope",
       "path": "README.md",
-      "upload_filename": "README.txt",
+      "upload_filename": "rag-eval-README.txt",
       "match_text": "Unknown and\nother-owner IDs both return 404."
     },
     {
       "id": "decisions.chunking",
       "path": "docs/decisions.md",
-      "upload_filename": "decisions.txt",
+      "upload_filename": "rag-eval-decisions.txt",
       "match_text": "Start with 1,000-character chunks and 150-character overlap."
     },
     {
       "id": "decisions.embedding",
       "path": "docs/decisions.md",
-      "upload_filename": "decisions.txt",
+      "upload_filename": "rag-eval-decisions.txt",
       "match_text": "Use Titan Text Embeddings V2 at 1,024 dimensions for both document and query\ntext."
     },
     {
       "id": "readme.retrieval-scope",
       "path": "README.md",
-      "upload_filename": "README.txt",
+      "upload_filename": "rag-eval-README.txt",
       "match_text": "It\nfilters by authenticated owner, `READY` document state, and embedding model;\noptional document IDs further narrow the search."
     },
     {
       "id": "readme.evidence-threshold",
       "path": "README.md",
-      "upload_filename": "README.txt",
+      "upload_filename": "rag-eval-README.txt",
       "match_text": "This value is a\nstarting heuristic, not an evaluation result or probability of correctness; it\nmust be calibrated against the labeled evaluation questions."
     },
     {
       "id": "readme.generation-modes",
       "path": "README.md",
-      "upload_filename": "README.txt",
+      "upload_filename": "rag-eval-README.txt",
       "match_text": "`thinking_mode=true` selects\nGPT-OSS 20B; normal mode selects Qwen3 32B."
     },
     {
       "id": "readme.reranker-default",
       "path": "README.md",
-      "upload_filename": "README.txt",
+      "upload_filename": "rag-eval-README.txt",
       "match_text": "`ENABLE_RERANKER` defaults to\n`false`; enabling it adds another model call"
     },
     {
       "id": "readme.concurrency",
       "path": "README.md",
-      "upload_filename": "README.txt",
+      "upload_filename": "rag-eval-README.txt",
       "match_text": "`WEB_CONCURRENCY`\ncontrols Uvicorn worker processes and defaults to 1. FastAPI runs synchronous\nroute handlers and dependencies in a thread pool"
     },
     {
       "id": "readme.answering-flow",
       "path": "README.md",
-      "upload_filename": "README.txt",
+      "upload_filename": "rag-eval-README.txt",
       "match_text": "`backend/src/answering.py` connects query embedding, scoped vector retrieval,\nthe evidence gate, optional reranking, generation, and citation validation."
     },
     {
       "id": "readme.citation-binding",
       "path": "README.md",
-      "upload_filename": "README.txt",
+      "upload_filename": "rag-eval-README.txt",
       "match_text": "`backend/src/citations.py` validates every model-selected source ID against\nthe server's prompt mapping. It builds each returned source from the original\nretrieval record"
     },
     {
       "id": "fixture.upload-limit-draft",
       "path": "eval/sources/upload_policy_draft.txt",
-      "upload_filename": "upload_policy_draft.txt",
+      "upload_filename": "rag-eval-upload_policy_draft.txt",
       "match_text": "Draft policy: the maximum upload size is 5 MiB."
     },
     {
       "id": "fixture.upload-limit-release",
       "path": "eval/sources/upload_policy_release.txt",
-      "upload_filename": "upload_policy_release.txt",
+      "upload_filename": "rag-eval-upload_policy_release.txt",
       "match_text": "Release note: the maximum upload size is 10 MiB."
     }
   ]

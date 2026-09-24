@@ -1098,8 +1098,53 @@ candidate awaits permission to use LangChain's text splitters. Revisit only
 after the candidate reports that permission; no dependency or chunker rewrite
 is part of this task.
 
-Next: implement D2's local evaluation runner without claiming real model
-results. D1 remains pending human review.
+The D2 local runner is implemented in `scripts/evaluate.py`, but D1 candidate
+review and an approved real evaluation are still required before reporting model
+metrics.
+
+## D2 — Evaluation runner
+
+Date: 2026-09-24. Status: **PASS for local metric tooling; BLOCKED for measured
+model evaluation** pending candidate review of D1 and explicit approval for
+Bedrock calls. Assessment trace: p2 evaluation; R05/R06/R07/R17.
+
+The runner checks the corpus without contacting external services by default.
+Its live mode reuses `answer_question`, scopes retrieval to the four uniquely
+named evaluation documents for the demo owner, maps returned chunk offsets back
+to the evidence anchors, and records retrieval recall@10, citation binding
+validity, refusal precision/recall, manual answer ratings, latency, failures and
+logical adapter request counts. It stops after the first case failure to avoid
+repeating calls against a broken service. Retrieval candidates are available
+only on the internal `AnswerOutcome`; the public chat response is unchanged.
+
+Validation:
+
+- `uv run --project backend python scripts/evaluate.py`: validated 15 cases and
+  15 evidence anchors; confirmed no database or model calls.
+- `uv run --project backend python scripts/evaluate.py --run`: exited 2 with
+  “live evaluation requires the explicit --allow-model-calls flag”; no DB or
+  Bedrock client request was made.
+- `uv run --project backend ruff check backend scripts/evaluate.py`: passed.
+- `uv run --project backend ruff format --check backend scripts/evaluate.py`:
+  **45 files already formatted**.
+- `uv run --project backend pytest -q backend/tests`: **123 passed, 1 skipped**,
+  two existing Starlette/anyio deprecation warnings.
+- No live model run, result file, S3 write or AWS resource was created.
+
+Results written to `eval/results*.json` are ignored because they may contain
+model output. Correctness uses a candidate's manual rating; no LLM judge or
+automatic string-overlap score is presented as factual correctness. The request
+counts are adapter-level logical requests and do not include internal retries
+or represent itemized cost. Separate runs can compare reranker off/on, but a
+reranker run adds billable calls.
+
+LangChain follow-up: the candidate is considering LangChain AWS model adapters,
+tools and memory in addition to its splitters and is awaiting permission. The
+current boto3 adapters and stateless RAG flow remain unchanged until that
+permission is confirmed; this evaluator does not depend on LangChain.
+
+Next: D3 security/operations review can proceed locally. D1 review, real D2
+metrics and all AWS deployment/fresh-client gates remain open.
 
 ## A1 runtime command follow-up — 2026-09-24
 

@@ -21,3 +21,6 @@ build/
 dist/
 .coverage
 htmlcov/
+
+# Locally generated evaluation output may contain model responses.
+/eval/results*.json

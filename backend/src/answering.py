@@ -1,7 +1,7 @@
 """Coordinate embedding, scoped retrieval, evidence gating, and generation."""
 
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal, Protocol
 from uuid import UUID
 
@@ -44,6 +44,7 @@ class AnswerOutcome:
     retrieved_candidate_count: int
     reranker_used: bool
     evidence_reason: str
+    retrieved_candidates: list[RetrievalCandidate] = field(default_factory=list)
 
 
 def answer_question(
@@ -85,6 +86,7 @@ def answer_question(
             retrieved_candidate_count=len(retrieved),
             reranker_used=False,
             evidence_reason=evidence.reason,
+            retrieved_candidates=retrieved,
         )
 
     evidence_candidates = evidence.candidates
@@ -114,6 +116,7 @@ def answer_question(
             retrieved_candidate_count=len(retrieved),
             reranker_used=reranker_used,
             evidence_reason="INVALID_CITATIONS",
+            retrieved_candidates=retrieved,
         )
 
     return AnswerOutcome(
@@ -124,4 +127,5 @@ def answer_question(
         retrieved_candidate_count=len(retrieved),
         reranker_used=reranker_used,
         evidence_reason=evidence.reason,
+        retrieved_candidates=retrieved,
     )

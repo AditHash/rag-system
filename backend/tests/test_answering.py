@@ -161,6 +161,7 @@ def test_answer_flow_reranks_and_binds_sources_to_post_rerank_order(monkeypatch)
     assert result.sources[0].filename == "second.txt"
     assert result.sources[0].page_number == 1
     assert result.retrieved_candidate_count == 2
+    assert result.retrieved_candidates == [first, second]
 
 
 def test_thinking_mode_selects_gpt_oss_without_exposing_reasoning(monkeypatch) -> None:

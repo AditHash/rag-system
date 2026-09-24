@@ -271,3 +271,12 @@ source pair supplies the conflicting-evidence case. Corpus integrity is checked
 locally. Candidate review and representative customer-document coverage remain
 pending, so this is not yet accepted as assessment ground truth and no model
 quality metrics are claimed.
+
+## D2 evaluation runner — 2026-09-24
+
+The local runner computes retrieval recall@10 from internal retrieved chunk
+offsets, checks citation-to-candidate binding, counts refusal outcomes, collects
+manual correctness labels, latency and adapter request counts, and records
+failures. Deterministic metric tests and corpus-only execution pass without
+external services. A real run is **BLOCKED** pending human review of D1 and
+approval for billable Bedrock inference; no metrics are recorded as measured.

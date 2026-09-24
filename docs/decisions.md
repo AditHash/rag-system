@@ -72,11 +72,12 @@ are starting points, not measured optimal settings; evaluation may change them.
 
 ### Chunk splitter follow-up — 2026-09-24
 
-The candidate is considering LangChain text splitters and is waiting for
-permission to use LangChain. Keep the current chunker unchanged until the
-candidate confirms authorization; then evaluate whether an appropriate splitter
-improves the requirements without unnecessary complexity. This note alone does
-not authorize a dependency or code change.
+The candidate is considering LangChain text splitters, AWS model adapters,
+tools, and memory, and is waiting for permission to use LangChain. Keep the
+current chunker and boto3 adapters/stateless flow unchanged until the candidate
+confirms authorization; then evaluate appropriate components against the
+requirements without unnecessary complexity. This note alone does not authorize
+a dependency or code change.
 
 ## B5 embeddings — 2026-09-24
 

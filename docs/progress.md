@@ -1214,3 +1214,44 @@ need deployment validation.
 Next: D4 needs explicit AWS resource/deployment approval and cost review. D1
 ground-truth review and approved live D2 evaluation also remain open; no AWS
 resources or model calls were made in this task.
+
+## Local manual-run path
+
+Date: 2026-09-25. Status: **PASS for documented procedure; live flow not run**.
+Objective trace: locally testable backend RAG flow and manual run instructions;
+assessment trace R02–R05/R08.
+
+Updated the README with environment loading (the app does not auto-load `.env`),
+safe model defaults, initial schema application, and copyable commands to upload
+a synthetic TXT, poll its persisted job, check a grounded answer/source, and
+check an unsupported question/refusal. Added `docs/samples/local-smoke.txt` with
+non-sensitive test facts and a local test that validates, extracts, and chunks
+that same fixture. The environment template now comments out optional AWS
+credential settings so sourcing it does not override a named profile with empty
+values, and contains safe model-ID defaults.
+
+Validation and boundary:
+
+- README examples were checked against current route paths, request fields,
+  response statuses, migration helper, and fixture path.
+- `backend/tests/test_local_smoke_fixture.py` verifies the documented fixture
+  passes upload validation, UTF-8 extraction, and deterministic chunk creation
+  with the expected source text and offsets.
+- A localhost probe found no service listening on port 5432 (`connect_ex=111`);
+  Docker Desktop's Linux engine was also unavailable. Therefore PostgreSQL
+  integration and the end-to-end manual scenario could not be run here.
+- No S3 write or Bedrock inference was attempted. The README clearly warns that
+  the manual ingestion/chat walkthrough uses S3 and billable Bedrock calls; the
+  user must run it only with authorized credentials and approval.
+- The server's non-cloud `/health` route can still be checked independently;
+  full-flow quality and actual citation behavior remain unverified until the
+  configured service is available.
+
+Tradeoff: the procedure exercises the real selected providers and DB when the
+user runs it, instead of substituting a fake local mode that could be mistaken
+for Bedrock/S3 verification. The fixture is synthetic; it does not count as the
+human-reviewed assessment corpus.
+
+Next: wait for review of this manual path before another planned task. D1
+candidate review, D2 approved measured inference, and D4 deployment remain
+separate open gates.

@@ -36,6 +36,102 @@ curl --fail http://127.0.0.1:8000/health
 Health reports that the API process is running. It does not check PostgreSQL or
 cloud services. The interactive API docs are at `/docs`.
 
+## Full local API walkthrough
+
+This walkthrough runs FastAPI and PostgreSQL locally, but it is not an offline
+or zero-cost test: ingestion writes the sample file to the configured S3 bucket
+and calls Bedrock to embed it. A supported chat question makes query-embedding
+and generation calls. Use an account and credentials authorized for these
+requests, and expect Bedrock and S3 charges. The normal test suite uses fakes
+and makes no such calls.
+
+Start with a PostgreSQL database where the `vector` extension is installed and
+the configured database user may create the application tables. From `backend/`,
+copy the template, set a long random API key, database URL, S3 bucket and an
+authorized AWS credential path, then load the values into the shell. The model
+IDs in the template are the current defaults and can be changed there or in
+`src/config.py`.
+
+```bash
+cd backend
+cp .env.example .env
+chmod 600 .env
+# Edit .env and set API_KEY, DATABASE_URL, S3_BUCKET, and AWS credentials.
+# Alternatively, set AWS_PROFILE in the shell and keep key variables commented.
+set -a
+source .env
+set +a
+```
+
+Apply the schema once to the configured database, then start the API:
+
+```bash
+uv run python -c 'from src.db import apply_schema, connect_database; connection = connect_database(); apply_schema(connection); connection.close()'
+uv run main.py
+```
+
+In another terminal, load the same `.env` and upload the synthetic fixture:
+
+```bash
+cd backend
+set -a
+source .env
+set +a
+curl --fail --silent --show-error \
+  -H "X-API-Key: $API_KEY" \
+  -F 'file=@../docs/samples/local-smoke.txt;type=text/plain' \
+  http://127.0.0.1:8000/api/v1/ingest
+```
+
+The response is `202` with an `ingestion_id`. Copy that ID into the following
+command and poll until `status` is `COMPLETED`:
+
+```bash
+INGESTION_ID='paste-the-returned-id-here'
+curl --fail --silent --show-error \
+  -H "X-API-Key: $API_KEY" \
+  "http://127.0.0.1:8000/api/v1/ingest/$INGESTION_ID/status"
+```
+
+Ask a question answered by the fixture. A successful response should be
+`ANSWERED` and include a source whose filename is `local-smoke.txt` and whose
+excerpt contains the 30-day retention statement:
+
+```bash
+curl --fail --silent --show-error \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"question":"How long are demo workspace records kept?"}' \
+  http://127.0.0.1:8000/api/v1/chat
+```
+
+Then check a fact the fixture does not contain. The expected result is
+`INSUFFICIENT_CONTEXT` with an empty `sources` array. If it answers, record that
+as a refusal failure; the evidence threshold is a starting heuristic and does
+not guarantee refusal quality.
+
+```bash
+curl --fail --silent --show-error \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"question":"What is the administrator phone number?"}' \
+  http://127.0.0.1:8000/api/v1/chat
+```
+
+The TXT fixture has no personal data, but ingestion still uploads it to S3.
+Keep `ENABLE_RERANKER=false` for this walkthrough to avoid the extra model
+request. No delete endpoint exists yet. To remove only this test upload, copy
+the returned `document_id` and `ingestion_id`, then run:
+
+```bash
+DOCUMENT_ID='paste-the-returned-document-id'
+aws s3 rm "s3://$S3_BUCKET/documents/demo-user/$DOCUMENT_ID"
+INGESTION_ID="$INGESTION_ID" uv run python -c 'import os; from uuid import UUID; from src.db import connect_database; connection = connect_database(); connection.execute("DELETE FROM ingestion_jobs WHERE id = %s AND owner_id = %s", (UUID(os.environ["INGESTION_ID"]), "demo-user")); connection.commit(); connection.close()'
+```
+
+The database delete cascades to that job's documents and chunks. The S3 command
+uses the document ID returned by this upload; verify both IDs before running it.
+
 ## Database
 
 The schema is in `backend/src/migrations/initial_schema.sql`; the rollback is in
@@ -106,8 +202,9 @@ Bedrock model IDs are set in `backend/src/config.py` and can be overridden with
 credentials come from environment variables. The reranker has a separate
 `BEDROCK_RERANKER_REGION` setting (default `us-east-1`) because model regions
 can differ from embedding and generation regions. `backend/.env.example` lists
-the variable names only; supply real credentials through local environment or
-a secret store.
+safe model defaults and variable names, but no credentials; supply real AWS
+credentials through environment variables, a configured named profile, or a
+secret store.
 
 `backend/src/storage.py` uses the standard boto3 credential chain, including AWS
 credential environment variables, and reads the bucket name from `S3_BUCKET`.

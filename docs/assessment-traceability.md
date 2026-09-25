@@ -293,3 +293,14 @@ provisioned. No rate limiting is implemented, and the shared demo key is not a
 production identity model. See `docs/security-operations.md` for evidence and
 residual risks. This is not a claim of deployed security or multi-tenant
 authorization.
+
+## Local manual-run path — 2026-09-25
+
+R02–R05/R08 **documented, not live-verified**. The README now gives the exact
+local configuration, schema apply, upload, status poll, supported chat and
+unsupported chat sequence using a synthetic text fixture. Running ingestion and
+supported chat writes to the configured S3 bucket and invokes Bedrock, so those
+steps require authorized credentials and can incur charges. No such request
+was made while creating this walkthrough. A live end-to-end pass and source
+check remain unverified. A local test validates the exact fixture through
+upload validation, extraction, and chunking.

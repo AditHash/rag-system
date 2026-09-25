@@ -8,7 +8,7 @@ from uuid import UUID, uuid4
 import psycopg
 
 from src.chunk_repository import mark_document_ready, upsert_chunks
-from src.chunking import chunk_pages
+from src.chunking import CHUNKER_VERSION, chunk_pages
 from src.config import BEDROCK_EMBEDDING_MODEL_ID
 from src.extraction import extract_pdf_pages, extract_txt
 
@@ -134,7 +134,7 @@ def process_job(
         _set_stage(connection_factory, owner_id, job_id, stage)
         with connection_factory() as connection:
             with connection.transaction():
-                upsert_chunks(connection, owner_id, document_id, chunks, vectors, "char-v1")
+                upsert_chunks(connection, owner_id, document_id, chunks, vectors, CHUNKER_VERSION)
                 if not mark_document_ready(connection, owner_id, document_id, len(chunks)):
                     raise RuntimeError("document could not be marked READY")
                 connection.execute(

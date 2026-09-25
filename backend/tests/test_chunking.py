@@ -26,6 +26,28 @@ def test_chunks_respect_size_overlap_and_offsets() -> None:
     assert all(isinstance(chunk, DocumentChunk) for chunk in chunks)
 
 
+def test_recursive_splitter_prefers_paragraph_boundary_and_keeps_absolute_offsets() -> None:
+    document_id = uuid4()
+    source_text = "First paragraph.\n\nSecond paragraph.\n\nThird paragraph."
+    page = ExtractedPage(
+        page_number=4,
+        text=source_text,
+        start_offset=100,
+        end_offset=100 + len(source_text),
+    )
+
+    chunks = chunk_pages([page], document_id, chunk_size=25, overlap=0)
+
+    assert len(chunks) >= 2
+    assert all(chunk.page_number == 4 for chunk in chunks)
+    for chunk in chunks:
+        relative_start = chunk.start_offset - page.start_offset
+        relative_end = chunk.end_offset - page.start_offset
+        assert page.text[relative_start:relative_end] == chunk.content
+        assert len(chunk.content) <= 25
+    assert chunks[0].content == "First paragraph."
+
+
 def test_chunk_ids_are_repeatable_but_scoped_to_document() -> None:
     page = ExtractedPage(page_number=None, text="small text", start_offset=0, end_offset=10)
     first_document = uuid4()

@@ -377,6 +377,56 @@ settings produces stable keys for safe idempotent persistence.
 
 Next: **B5 — Embedding provider**.
 
+### B4 LangChain splitter follow-up — 2026-09-25
+
+Status: **PASS** for the local splitter migration. The user authorized LangChain
+after reviewing the proposed chunk-size/overlap explanation. This updates B4's
+implementation; it does not change the assessment requirements or prove improved
+retrieval quality.
+
+`backend/src/chunking.py` now wraps each extracted page in a LangChain
+`Document` and runs `RecursiveCharacterTextSplitter` with `add_start_index=True`.
+Pages are split independently, whitespace is retained, and the returned
+relative index is combined with the page's base offset. Chunks keep their
+original page and deterministic UUIDv5 ID. The persisted version marker is now
+`langchain-recursive-v1`, so new/retried chunks identify the changed algorithm.
+The splitter prefers paragraph/line boundaries and falls back to smaller
+separators. Chunk size 1,000 and overlap 150 remain character-based starting
+values, not measured optima or token budgets.
+
+Validation (commands run from `backend/`):
+
+- Baseline `uv run --frozen pytest -q tests/test_chunking.py`: **8 passed**.
+- `uv run --frozen pytest -q`: **125 passed, 1 skipped**, one existing
+  Starlette/anyio deprecation warning. The skipped test requires the explicit
+  disposable `A3_TEST_DATABASE_URL`.
+- `uv run --frozen ruff check .`: passed.
+- `uv run --frozen ruff format --check .`: **45 files already formatted**.
+- Added a check that paragraph boundaries are preferred and chunk offsets map
+  exactly back to source text with a nonzero page base offset.
+- The first full-suite rerun found that `eval/evidence.json` still pointed to
+  the old chunking decision sentence. Updated only that source anchor (the
+  evaluation question and expected chunk settings are unchanged); the complete
+  suite then passed.
+- No database migration, AWS request, or paid Bedrock call was made.
+
+Tradeoff: natural boundaries usually keep sentences and paragraphs intact, which
+can make a retrieved passage more coherent. Chunk lengths now vary and overlap
+need not be an exact character window when separators are used. The current
+settings still require evaluation on representative documents. Retaining
+whitespace costs some embedding/context characters but keeps source offsets
+straightforward to verify.
+
+Walkthrough: Why use a recursive splitter? It tries paragraph and line breaks
+first, then smaller boundaries if a chunk is still too large. Why keep custom
+PostgreSQL retrieval? The current tables enforce owner scope, READY visibility,
+and transactional publication; replacing them with LangChain PGVector would
+change the persistence schema and security path. This migration changes only
+chunk construction.
+
+This supersedes the earlier “waiting for permission to use LangChain” notes below.
+The AWS adapters and answer flow remain unchanged in this checkpoint.
+
 ## B5 — Bedrock embedding adapter
 
 Date: 2026-09-24. Status: **PASS** for provider logic under local fake tests;

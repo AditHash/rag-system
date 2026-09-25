@@ -1,14 +1,18 @@
-"""Deterministic character-based chunking with page and offset metadata."""
+"""Split extracted pages into deterministic chunks with source metadata."""
 
 from dataclasses import dataclass
 from hashlib import sha256
 from uuid import NAMESPACE_URL, UUID, uuid5
+
+from langchain_core.documents import Document
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from src.extraction import ExtractedPage
 
 DEFAULT_CHUNK_SIZE = 1_000
 DEFAULT_CHUNK_OVERLAP = 150
 MAX_CHUNK_SIZE = 10_000
+CHUNKER_VERSION = "langchain-recursive-v1"
 
 
 @dataclass(frozen=True)
@@ -30,8 +34,14 @@ def chunk_pages(
     chunk_size: int = DEFAULT_CHUNK_SIZE,
     overlap: int = DEFAULT_CHUNK_OVERLAP,
 ) -> list[DocumentChunk]:
-    """Split each extracted page into bounded, overlapping character windows."""
+    """Split each extracted page at natural text boundaries when possible."""
     _validate_settings(chunk_size, overlap)
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=chunk_size,
+        chunk_overlap=overlap,
+        add_start_index=True,
+        strip_whitespace=False,
+    )
     chunks: list[DocumentChunk] = []
 
     for page in pages:
@@ -40,13 +50,18 @@ def chunk_pages(
         if not page.text.strip():
             continue
 
-        page_start = 0
-        while page_start < len(page.text):
-            page_end = min(page_start + chunk_size, len(page.text))
-            content = page.text[page_start:page_end]
+        page_document = Document(page_content=page.text, metadata={"page_number": page.page_number})
+        for split in splitter.split_documents([page_document]):
+            page_offset = split.metadata.get("start_index")
+            if not isinstance(page_offset, int) or page_offset < 0:
+                raise ValueError("splitter did not return a valid source offset")
+
+            content = split.page_content
+            if not content.strip():
+                continue
+            absolute_start = page.start_offset + page_offset
+            absolute_end = absolute_start + len(content)
             ordinal = len(chunks)
-            absolute_start = page.start_offset + page_start
-            absolute_end = page.start_offset + page_end
             chunk_id = _stable_chunk_id(
                 document_id,
                 page.page_number,
@@ -66,9 +81,6 @@ def chunk_pages(
                     content=content,
                 )
             )
-            if page_end == len(page.text):
-                break
-            page_start = page_end - overlap
 
     return chunks
 

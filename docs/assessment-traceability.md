@@ -128,6 +128,15 @@ handling and repeatable document-scoped IDs. Chunk size and overlap are
 implementation starting points requiring retrieval evaluation. See
 `docs/progress.md` for tests and tradeoffs.
 
+### B4 LangChain splitter follow-up — 2026-09-25
+
+R02/R04 remains **PASS** for local chunk construction after the approved
+implementation change. `RecursiveCharacterTextSplitter` prefers natural text
+boundaries and preserves page/offset metadata; a test verifies the returned
+offset against the exact source slice. LangChain does not establish improved
+retrieval quality; chunk settings still require evaluation. See the B4
+follow-up in `docs/progress.md`.
+
 ## B5 embeddings — 2026-09-24
 
 R02 **PASS** for local adapter behavior. The Titan V2 adapter requests and

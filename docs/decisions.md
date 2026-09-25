@@ -63,21 +63,31 @@ extension installed because it can be shared by other applications.
 
 ## B4 chunking — 2026-09-24
 
-Start with 1,000-character chunks and 150-character overlap. Character windows
-are easy to bound and explain, and keep source offsets exact; token-aware or
-semantic splitting would add a tokenizer/dependency before the evaluation set
-shows it is needed. Chunk IDs are deterministic UUIDv5 values scoped to the
-document and source location/content, making retries repeatable. These defaults
-are starting points, not measured optimal settings; evaluation may change them.
+Start with `RecursiveCharacterTextSplitter` at 1,000 characters and 150
+characters of overlap. The splitter tries paragraph and line boundaries before
+falling back to smaller separators. Preserve whitespace and use the splitter's
+start index so each chunk can be checked against its original extracted page.
+These are character counts, not token budgets. Chunk IDs are deterministic
+UUIDv5 values scoped to the document and source location/content, making retries
+repeatable. These defaults are starting points, not measured optimal settings;
+evaluation may change them.
 
-### Chunk splitter follow-up — 2026-09-24
+### LangChain approval and first application — 2026-09-25
 
-The candidate is considering LangChain text splitters, AWS model adapters,
-tools, and memory, and is waiting for permission to use LangChain. Keep the
-current chunker and boto3 adapters/stateless flow unchanged until the candidate
-confirms authorization; then evaluate appropriate components against the
-requirements without unnecessary complexity. This note alone does not authorize
-a dependency or code change.
+The user approved LangChain text splitters and requested a broader LangChain
+refactor. Apply it incrementally, testing each boundary before proceeding. The
+first slice uses LangChain's recursive text splitter while retaining page
+metadata, exact offsets, deterministic IDs, and the existing PostgreSQL contract.
+The earlier note awaiting permission is superseded.
+
+LangChain's PGVector integration is not adopted automatically: this service's
+direct SQL currently enforces owner and READY filters and commits chunk rows with
+the READY transition. The documented PGVector wrapper uses its own vector-store
+schema, so switching it would require a deliberate schema/security redesign and
+new integration tests. Keep retrieval explicit until that migration is
+reviewed. Use the documented two-step RAG approach rather than adding a Deep
+Agents runtime, tools, or memory to a stateless, bounded Q&A endpoint; there is
+no user-scoped conversation-history contract today.
 
 ## B5 embeddings — 2026-09-24
 

@@ -219,12 +219,14 @@ mapping. TXT is decoded as UTF-8 and represented as one record. Offsets count
 characters in each extracted text record. Scanned and password-protected PDFs
 are rejected; OCR is not implemented.
 
-`backend/src/chunking.py` splits each text record into fixed-size character
-windows with overlap. Defaults are 1,000 characters and 150 characters of
+`backend/src/chunking.py` uses LangChain's `RecursiveCharacterTextSplitter` on
+each extracted page. It tries paragraph and line boundaries before splitting
+more finely, and records a start index so citation offsets still point into the
+extracted source text. Defaults are 1,000 characters and 150 characters of
 overlap; callers can set both values within bounded limits. Each chunk keeps its
 document, page, ordinal, and text offsets, and receives a deterministic ID for
-safe retries. This simple splitter may cut a sentence or word at a boundary; the
-parameters need evaluation against the target documents.
+safe retries. These are character counts, not token limits, and the settings
+need evaluation against representative documents.
 
 `backend/src/chunk_repository.py` writes vectors and chunk metadata in PostgreSQL
 transactions. A document remains hidden from `ready_chunks` until its owner-scoped

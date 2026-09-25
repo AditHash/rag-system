@@ -1,387 +1,126 @@
-# Enterprise RAG Platform
+# Document Q&A backend
 
-This repository is the backend foundation for an enterprise-grade retrieval-
-augmented generation (RAG) system. Document Q&A is one capability within that
-system. The selected architecture is FastAPI, private S3, PostgreSQL/pgvector,
-Amazon Bedrock, and ECS Fargate. These describe the target; they are not all
-implemented or deployed yet.
+A small FastAPI backend for the first two RAG steps: ingest documents into a
+vector store, then find relevant chunks for a question. It uses LangChain for
+document chunks, Bedrock embeddings, and PostgreSQL/pgvector storage and search.
 
-The current backend provides a health endpoint and an authenticated one-file
-ingestion endpoint. It stores the upload in S3, creates a PostgreSQL job, and
-returns `202 PENDING` before background extraction, chunking, embedding, and
-index persistence run. An authenticated status endpoint reports persisted job
-state and document IDs. Retrieval, grounded answer generation, and cloud
-answer orchestration are implemented as local service functions and the
-authenticated chat route is mounted. Cloud deployment remains to be implemented.
+This version does not generate answers, rerank results, or refuse unsupported
+questions. It returns retrieved passages and their source metadata so the
+retrieval flow can be inspected before answer generation is added.
 
-## Local development
+## Requirements
 
-The backend requires Python 3.12 and uv 0.12.17. Backend code, its environment
-template, tests, lockfile and container files are under `backend/`. A future
-frontend will live under `frontend/`.
+- Python 3.12 and `uv`
+- PostgreSQL with the `vector` extension installed
+- AWS credentials permitted to invoke the configured Bedrock embedding model
+- A database user that can connect to the database and use the `vector` extension
 
-```bash
-cd backend
-uv sync --frozen
-uv run main.py
-```
+No AWS resources are provisioned by these instructions. Embedding requests are
+billable Bedrock calls.
 
-Check the service:
+## Configure and run
 
-```bash
-curl --fail http://127.0.0.1:8000/health
-# {"status":"ok"}
-```
-
-Health reports that the API process is running. It does not check PostgreSQL or
-cloud services. The interactive API docs are at `/docs`.
-
-## Full local API walkthrough
-
-This walkthrough runs FastAPI and PostgreSQL locally, but it is not an offline
-or zero-cost test: ingestion writes the sample file to the configured S3 bucket
-and calls Bedrock to embed it. A supported chat question makes query-embedding
-and generation calls. Use an account and credentials authorized for these
-requests, and expect Bedrock and S3 charges. The normal test suite uses fakes
-and makes no such calls.
-
-Start with a PostgreSQL database where the `vector` extension is installed and
-the configured database user may create the application tables. From `backend/`,
-copy the template, set a long random API key, database URL, S3 bucket and an
-authorized AWS credential path, then load the values into the shell. The model
-IDs in the template are the current defaults and can be changed there or in
-`src/config.py`.
+From `backend/`, copy `.env.example` to `.env`, fill in the local database URL
+and a private API key, then export the settings into your shell. Use your normal
+AWS credential chain (for example, `AWS_PROFILE`) for Bedrock access.
 
 ```bash
 cd backend
 cp .env.example .env
-chmod 600 .env
-# Edit .env and set API_KEY, DATABASE_URL, S3_BUCKET, and AWS credentials.
-# Alternatively, set AWS_PROFILE in the shell and keep key variables commented.
+# Edit .env; do not commit it.
 set -a
 source .env
 set +a
-```
-
-Apply the schema once to the configured database, then start the API:
-
-```bash
-uv run python -c 'from src.db import apply_schema, connect_database; connection = connect_database(); apply_schema(connection); connection.close()'
+uv sync --frozen
 uv run main.py
 ```
 
-In another terminal, load the same `.env` and upload the synthetic fixture:
+The database URL uses the psycopg 3 SQLAlchemy scheme, for example:
+
+```text
+postgresql+psycopg://user:password@localhost:5432/document_db
+```
+
+The LangChain vector store creates its own tables in the configured database.
+The PostgreSQL server must already have pgvector installed. Model ID, region,
+chunk size, overlap, collection name, database URL, and API key are configurable
+in `backend/src/config.py` through environment variables. `AWS_PROFILE` is read
+by the standard AWS credential chain and does not need to be copied into code.
+
+Check the process health and interactive API documentation:
 
 ```bash
-cd backend
-set -a
-source .env
-set +a
-curl --fail --silent --show-error \
+curl http://127.0.0.1:8000/health
+# {"status":"ok"}
+```
+
+Open `http://127.0.0.1:8000/docs` to explore the two endpoints.
+
+## Ingest a document
+
+PDF and UTF-8 TXT files up to 10 MiB are accepted. The endpoint extracts text,
+keeps the source filename and 1-based page in LangChain document metadata,
+splits text into 1,000-character chunks with 150 characters of overlap by
+default, embeds the chunks, and stores them in PostgreSQL.
+
+```bash
+curl --fail --show-error \
   -H "X-API-Key: $API_KEY" \
-  -F 'file=@../docs/samples/local-smoke.txt;type=text/plain' \
+  -F 'file=@./example.pdf' \
   http://127.0.0.1:8000/api/v1/ingest
 ```
 
-The response is `202` with an `ingestion_id`. Copy that ID into the following
-command and poll until `status` is `COMPLETED`:
+Example response:
 
-```bash
-INGESTION_ID='paste-the-returned-id-here'
-curl --fail --silent --show-error \
-  -H "X-API-Key: $API_KEY" \
-  "http://127.0.0.1:8000/api/v1/ingest/$INGESTION_ID/status"
+```json
+{
+  "document_id": "2e7a...",
+  "source": "example.pdf",
+  "status": "indexed",
+  "chunk_count": 8
+}
 ```
 
-Ask a question answered by the fixture. A successful response should be
-`ANSWERED` and include a source whose filename is `local-smoke.txt` and whose
-excerpt contains the 30-day retention statement:
+Ingestion is synchronous in this demo. It returns only after the Bedrock
+embeddings and PostgreSQL writes finish.
+
+## Search stored documents
 
 ```bash
-curl --fail --silent --show-error \
-  -H "X-API-Key: $API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"question":"How long are demo workspace records kept?"}' \
-  http://127.0.0.1:8000/api/v1/chat
-```
-
-Then check a fact the fixture does not contain. The expected result is
-`INSUFFICIENT_CONTEXT` with an empty `sources` array. If it answers, record that
-as a refusal failure; the evidence threshold is a starting heuristic and does
-not guarantee refusal quality.
-
-```bash
-curl --fail --silent --show-error \
+curl --fail --show-error \
   -H "X-API-Key: $API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"question":"What is the administrator phone number?"}' \
-  http://127.0.0.1:8000/api/v1/chat
+  -d '{"question":"What does the document say about retention?","top_k":5}' \
+  http://127.0.0.1:8000/api/v1/search
 ```
 
-The TXT fixture has no personal data, but ingestion still uploads it to S3.
-Keep `ENABLE_RERANKER=false` for this walkthrough to avoid the extra model
-request. No delete endpoint exists yet. To remove only this test upload, copy
-the returned `document_id` and `ingestion_id`, then run:
+Each result includes the chunk text, filename, page, document ID, chunk index,
+and pgvector distance. Smaller distance means a closer vector match; this is a
+retrieval diagnostic, not a calibrated answer-confidence score.
 
-```bash
-DOCUMENT_ID='paste-the-returned-document-id'
-aws s3 rm "s3://$S3_BUCKET/documents/demo-user/$DOCUMENT_ID"
-INGESTION_ID="$INGESTION_ID" uv run python -c 'import os; from uuid import UUID; from src.db import connect_database; connection = connect_database(); connection.execute("DELETE FROM ingestion_jobs WHERE id = %s AND owner_id = %s", (UUID(os.environ["INGESTION_ID"]), "demo-user")); connection.commit(); connection.close()'
-```
+## Choices and limits
 
-The database delete cascades to that job's documents and chunks. The S3 command
-uses the document ID returned by this upload; verify both IDs before running it.
+- `RecursiveCharacterTextSplitter` tries natural text boundaries and keeps
+  overlap between adjacent chunks. The initial size and overlap are reasonable
+  demo defaults, not measured optimal values. Small chunks are precise but can
+  lose context; large chunks retain context but can dilute matching and use
+  more tokens per later answer call.
+- Amazon Titan Text Embeddings V2 is the default embedding model. The same
+  configured embedding object/model is used for document and query vectors.
+- LangChain's PostgreSQL vector store keeps vector persistence and similarity
+  search in PostgreSQL, which is already part of the planned local setup.
+- Raw files are not saved to S3 in this local first version. A new upload gets a
+  new document ID; there is no delete endpoint yet.
+- PDF text extraction does not OCR scanned pages. A file with no extracted
+  text is rejected.
+- The API key is a single shared demo key, not user identity or multi-tenant
+  access control. Keep this API on a trusted local network.
+- There is no answer generation, grounding check, citation verification,
+  refusal logic, reranker, evaluation set, or cloud deployment yet. These are
+  remaining assessment work.
 
-## Database
+## Manual checks
 
-The schema is in `backend/src/migrations/initial_schema.sql`; the rollback is in
-`backend/src/migrations/rollback.sql`. The migration creates jobs, documents and
-chunks, with embeddings fixed at 1,024 dimensions. It requires PostgreSQL with
-the pgvector extension installed. The `ready_chunks` view only exposes chunks
-whose documents are marked `READY`; retrieval must also filter by owner. Migration
-helpers are in `backend/src/db.py`:
-
-```python
-from src.db import apply_schema, connect_database
-
-with connect_database() as connection:
-    apply_schema(connection)
-```
-
-`connect_database()` reads `DATABASE_URL` from the environment. For deployment,
-the URL will point to PostgreSQL on the user's EC2 instance; the database should
-be reachable over the private network. Do not put credentials in source control.
-The down migration removes the three tables and keeps the pgvector extension
-because other applications may use it.
-
-`POST /api/v1/ingest` requires the `X-API-Key` header and one multipart field
-named `file`. Set `API_KEY` in the local environment; a valid key currently maps
-to one demo principal, so this is not multi-tenant identity management. The
-route accepts PDF or UTF-8 TXT up to 10 MiB and bounds the complete multipart
-body before parsing it. It validates and stores the upload, creates a persistent
-job, then schedules ingestion with FastAPI `BackgroundTasks`. A response means
-the job was accepted, not completed. This in-process task can be interrupted by
-a restart and is not durable queue delivery. A real ingestion needs a configured
-`S3_BUCKET`, `DATABASE_URL`, AWS credentials/role, and Bedrock access; local
-endpoint tests replace those providers with fakes. Question input is capped at
-4,000 characters for the chat endpoint.
-
-Poll the job with the returned `ingestion_id`:
-
-```bash
-curl --fail --silent --show-error \
-  -H "X-API-Key: $API_KEY" \
-  "http://127.0.0.1:8000/api/v1/ingest/$INGESTION_ID/status"
-```
-
-The status response includes `status`, current `stage`, completed/total document
-counts, document IDs and a sanitized error when the job fails. Unknown and
-other-owner IDs both return 404. In this demo, the single API key represents one
-principal.
-
-Ask a question after at least one document reaches `READY`:
-
-```bash
-curl --fail --silent --show-error \
-  -H "X-API-Key: $API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"question":"What does the document say?","top_k":10,"thinking_mode":false}' \
-  http://127.0.0.1:8000/api/v1/chat
-```
-
-The optional `document_ids` array limits retrieval to documents owned by the
-authenticated principal. `top_k` must be 1–20. `thinking_mode=true` selects
-GPT-OSS 20B; normal mode selects Qwen3 32B. Chat needs a configured database and
-Bedrock access and can incur inference charges. `ENABLE_RERANKER` defaults to
-`false`; enabling it adds another model call, so keep it disabled until the
-evaluation demonstrates a retrieval-quality benefit.
-
-Bedrock model IDs are set in `backend/src/config.py` and can be overridden with
-`BEDROCK_EMBEDDING_MODEL_ID`, `BEDROCK_CHAT_MODEL_ID`,
-`BEDROCK_THINKING_MODEL_ID`, and `BEDROCK_RERANKER_MODEL_ID`. AWS region and
-credentials come from environment variables. The reranker has a separate
-`BEDROCK_RERANKER_REGION` setting (default `us-east-1`) because model regions
-can differ from embedding and generation regions. `backend/.env.example` lists
-safe model defaults and variable names, but no credentials; supply real AWS
-credentials through environment variables, a configured named profile, or a
-secret store.
-
-`backend/src/storage.py` uses the standard boto3 credential chain, including AWS
-credential environment variables, and reads the bucket name from `S3_BUCKET`.
-Object keys are generated from the owner and document IDs; original filenames are
-not used as keys. The adapter requests server-side AES-256 encryption and does
-not set a public ACL. Bucket-level Block Public Access and IAM permissions still
-must be configured separately; no S3 bucket has been created or tested here.
-
-`backend/src/extraction.py` returns one text record per PDF page with 1-based
-page numbers, preserving blank pages so later citations keep their original page
-mapping. TXT is decoded as UTF-8 and represented as one record. Offsets count
-characters in each extracted text record. Scanned and password-protected PDFs
-are rejected; OCR is not implemented.
-
-`backend/src/chunking.py` uses LangChain's `RecursiveCharacterTextSplitter` on
-each extracted page. It tries paragraph and line boundaries before splitting
-more finely, and records a start index so citation offsets still point into the
-extracted source text. Defaults are 1,000 characters and 150 characters of
-overlap; callers can set both values within bounded limits. Each chunk keeps its
-document, page, ordinal, and text offsets, and receives a deterministic ID for
-safe retries. These are character counts, not token limits, and the settings
-need evaluation against representative documents.
-
-`backend/src/chunk_repository.py` writes vectors and chunk metadata in PostgreSQL
-transactions. A document remains hidden from `ready_chunks` until its owner-scoped
-READY transition confirms the expected chunk count.
-
-`backend/src/ingestion.py` connects storage, extraction, chunking, embedding,
-and persistence for one document per job. The mounted ingestion route completes
-the S3 upload and job creation, returns `202 PENDING`, then starts embedding in
-FastAPI's in-process background task. Its database connection factory keeps
-transactions short around external I/O. A failed stage stores only the stage
-name and marks the document `FAILED`; retrying a completed job returns its
-stored chunk count without repeating inference, and an atomic claim rejects
-simultaneous processing attempts. A worker left in `PROCESSING` after process
-termination currently needs recovery. The status route reads these persisted
-states after a process restart, although the in-process task itself is not
-durable and can leave a job stuck in `PROCESSING`.
-
-`backend/src/embedding.py` contains the Bedrock Titan V2 adapter. It uses the
-same model and fixed 1,024 dimensions for document and query embeddings, validates
-each response before returning it, and retries throttling at most twice after
-the initial attempt. A live embedding request is not part of local tests.
-
-`backend/src/query_embedding.py` is the retrieval boundary: it checks that the
-query model ID matches the indexed model and that the query vector has 1,024
-finite numeric values before passing it to similarity search. Query text must
-not be empty. Retrieval supplies the expected indexed model ID; a mismatch is a
-configuration error, not a reason to silently compare vectors from different
-models.
-
-`backend/src/retrieval.py` searches PostgreSQL chunks using cosine distance. It
-filters by authenticated owner, `READY` document state, and embedding model;
-optional document IDs further narrow the search. The default returns 10
-candidates and the hard limit is 20. Results include the original filename,
-page, text offsets, chunk ordinal/text, cosine distance, and
-`similarity = 1 - distance`.
-Similarity is a ranking value, not a calibrated probability that an answer is
-correct. The authenticated chat route calls this retrieval function before the
-evidence gate and answer generation.
-
-`backend/src/evidence.py` provides the pre-generation gate. It refuses when no
-candidate exists or when every cosine similarity is below
-`EVIDENCE_MIN_COSINE_SIMILARITY` (initial default `0.55`). This value is a
-starting heuristic, not an evaluation result or probability of correctness; it
-must be calibrated against the labeled evaluation questions. Passing this gate
-only permits generation to inspect evidence and does not itself prove that the
-evidence supports a particular claim.
-
-`backend/src/reranking.py` optionally sends the top retrieval candidates to the
-Bedrock `bedrock-agent-runtime.rerank` API, then maps returned indexes back to
-the original server-held candidates. On a sanitized provider/response failure,
-it returns the original top candidates with no fabricated rerank scores and
-marks the outcome as a fallback. Reranker relevance scores are only model
-rankings, not answer confidence. No live reranking call is made by the normal
-test suite.
-
-`backend/src/generation.py` assigns server-side IDs (`S1`, `S2`, …) to each
-candidate and serializes only those IDs and chunk text into the model context.
-The prompt tells the model that documents are untrusted data and forbids
-outside knowledge, invented source IDs, metadata, or hidden reasoning. The
-Bedrock Converse adapter bounds output to 1,024 tokens and parses exactly
-`status`, `answer`, and `cited_source_ids`; malformed JSON or upstream errors
-fail closed. The C6 validator binds cited IDs to trusted retrieval records.
-Citation validity still does not prove claim support. Qwen3 32B is the
-normal model and GPT-OSS 20B is used when the caller selects thinking mode. No
-live generation call runs in regular tests.
-
-`backend/src/citations.py` validates every model-selected source ID against the
-server's prompt mapping. It builds each returned source from the original
-retrieval record: document ID, filename, page, offsets, and excerpt. Missing,
-duplicate, or unknown IDs fail validation; a refusal returns an empty source
-list. Valid IDs prove only that a source was retrieved, not that it logically
-supports the full answer, so semantic correctness still needs evaluation.
-
-`backend/src/answering.py` connects query embedding, scoped vector retrieval,
-the evidence gate, optional reranking, generation, and citation validation.
-Empty/weak evidence returns `INSUFFICIENT_CONTEXT` before the reranker or
-generator is called. `thinking_mode=false` selects Qwen3 32B; `true` selects
-GPT-OSS 20B. The mounted authenticated HTTP chat endpoint returns a fixed safe
-refusal if citation IDs fail validation. Unit tests inject fake providers and
-make no Bedrock calls.
-
-To run the database migration check, provide an empty, disposable local database
-whose name begins with `a3_test`:
-
-```bash
-cd backend
-A3_TEST_DATABASE_URL='postgresql://DB_USER:DB_PASSWORD@localhost:5432/a3_test' uv run pytest -q tests/test_db_migrations.py
-```
-
-The test creates and removes the schema. Do not point it at a database containing
-data you need to keep. Without this setting, the database test is skipped.
-
-## Design notes
-
-**Why 1,024 embedding dimensions?** The selected Titan Text Embeddings V2
-configuration returned a 1,024-value vector in the approved live probe. The
-database column is `vector(1024)`, so documents and questions must use the same
-model and dimension. Changing either requires a schema migration and re-embedding
-stored chunks.
-
-**Does `ready_chunks` enforce access control?** No. It hides chunks until their
-document is `READY`, so incomplete ingestion is excluded from retrieval. Each
-retrieval query must also filter by the authenticated caller's `owner_id`. The
-view does not restrict access to the underlying tables or identify the caller.
-
-## Security and operational limits
-
-The API key is a single shared demo credential mapped to one principal. The
-service bounds upload and question sizes and returns sanitized API errors, but
-it has no request-rate limit. Before exposing it publicly, add HTTPS ingress and
-a shared edge rate limit; per-process counters would reset or multiply across
-workers. S3 private-bucket policies, least-privilege ECS roles, PostgreSQL
-network rules, TLS, and CloudWatch retention still need deployment verification.
-The full local review and its exact gaps are recorded in
-[the security and operations checklist](docs/security-operations.md).
-
-## Checks
-
-```bash
-cd backend
-uv run --frozen ruff check .
-uv run --frozen ruff format --check .
-uv run --frozen pytest -q
-```
-
-Regular tests make no AWS calls. Ingestion endpoint tests use fake S3, database,
-and embedding dependencies. The database migration test needs the explicit
-disposable database setting described above.
-
-## Container
-
-Requires a running Docker engine. On WSL, either enable Docker Desktop integration
-or use the Windows client after starting Docker Desktop with `docker.exe desktop
-start`.
-
-```bash
-cd backend
-docker build -t enterprise-rag:local .
-docker run --rm --name enterprise-rag -p 127.0.0.1:8000:8000 enterprise-rag:local
-```
-
-The container runs as UID/GID 10001. It serves the health and authenticated
-ingestion routes. No AWS clients or database connections start at import time;
-ingestion clients are initialized lazily when the route is called. No cloud
-resources are created by local development or tests.
-
-The Docker image syncs locked runtime dependencies without installing/building
-the local project package, then starts with `uv run main.py`. `UV_NO_SYNC=1`
-prevents a second environment sync at container startup. `WEB_CONCURRENCY`
-controls Uvicorn worker processes and defaults to 1. FastAPI runs synchronous
-route handlers and dependencies in a thread pool; Uvicorn workers are separate
-processes, not threads. For ECS, begin with one worker per task and scale task
-count horizontally; increase workers only after matching them to the task's CPU
-and memory and measuring load. No ECS sizing or scaling resources are configured.
-
-See [progress](docs/progress.md),
-[assessment traceability](docs/assessment-traceability.md), and
-[decisions](docs/decisions.md) for implementation status and known limitations.
+The test suite is intentionally deferred for this step. Manually ingest a
+small, non-sensitive text/PDF file, then search using a question whose answer is
+present in it. Uploading and searching call Bedrock and may incur charges.

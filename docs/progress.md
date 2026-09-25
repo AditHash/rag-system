@@ -402,6 +402,9 @@ Validation (commands run from `backend/`):
   disposable `A3_TEST_DATABASE_URL`.
 - `uv run --frozen ruff check .`: passed.
 - `uv run --frozen ruff format --check .`: **45 files already formatted**.
+- `docker.exe version --format '{{.Server.Version}}'` could not connect because
+  the Docker Desktop Linux engine was stopped, so the image was not rebuilt
+  against this dependency update. The earlier A1 image check predates LangChain.
 - Added a check that paragraph boundaries are preferred and chunk offsets map
   exactly back to source text with a nonzero page base offset.
 - The first full-suite rerun found that `eval/evidence.json` still pointed to

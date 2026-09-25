@@ -280,3 +280,16 @@ manual correctness labels, latency and adapter request counts, and records
 failures. Deterministic metric tests and corpus-only execution pass without
 external services. A real run is **BLOCKED** pending human review of D1 and
 approval for billable Bedrock inference; no metrics are recorded as measured.
+
+## D3 local security and operations review — 2026-09-25
+
+R08/R09 **PASS for the reviewed local controls and documented deployment gaps**.
+The API-key boundary, bounded inputs, sanitized responses, owner-scoped status
+and retrieval, liveness behavior, S3 adapter request shape, and ignored secret
+paths were checked against code and negative tests. The assessment's p3 asks for
+sensible storage access and least-needed IAM with no hardcoded credentials; the
+AWS policies and deployed roles remain unverified because no resources were
+provisioned. No rate limiting is implemented, and the shared demo key is not a
+production identity model. See `docs/security-operations.md` for evidence and
+residual risks. This is not a claim of deployed security or multi-tenant
+authorization.

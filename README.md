@@ -233,6 +233,17 @@ document is `READY`, so incomplete ingestion is excluded from retrieval. Each
 retrieval query must also filter by the authenticated caller's `owner_id`. The
 view does not restrict access to the underlying tables or identify the caller.
 
+## Security and operational limits
+
+The API key is a single shared demo credential mapped to one principal. The
+service bounds upload and question sizes and returns sanitized API errors, but
+it has no request-rate limit. Before exposing it publicly, add HTTPS ingress and
+a shared edge rate limit; per-process counters would reset or multiply across
+workers. S3 private-bucket policies, least-privilege ECS roles, PostgreSQL
+network rules, TLS, and CloudWatch retention still need deployment verification.
+The full local review and its exact gaps are recorded in
+[the security and operations checklist](docs/security-operations.md).
+
 ## Checks
 
 ```bash

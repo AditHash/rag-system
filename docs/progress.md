@@ -1168,3 +1168,49 @@ Validation:
 - `docker.exe build -t enterprise-rag:local .` from `backend/`: passed. Build ran `uv sync --frozen --no-dev --no-install-project` and installed 23 runtime dependencies without building/installing the backend project.
 - Ran the resulting container and called `GET /health`: HTTP 200 with `{"status":"ok"}`. The temporary container was stopped and removed.
 - `UV_NO_SYNC=1` is the documented uv environment setting that prevents the startup `uv run` from syncing the venv. No AWS resources or inference calls were used.
+
+## D3 — Local security and operations review
+
+Date: 2026-09-25. Status: **PASS for local review and documentation; deployment
+controls remain unverified**. Assessment trace: p3 permissions/storage guidance;
+R08/R09/R10.
+
+Added `docs/security-operations.md` as a code-and-test-backed checklist, linked
+from the README. The review records verified API-key checks, request bounds,
+owner-scoped status/retrieval, sanitized API responses, liveness, S3 adapter
+behavior, and ignored credential paths. It also names the controls that still
+need real deployment evidence: least-privilege task/execution roles, S3
+Block Public Access and bucket policy, database network/TLS/role setup,
+CloudWatch retention/redaction, edge rate limiting, and stuck-job recovery.
+No rate limiter was added: a local per-process counter would reset on restarts
+and multiply across workers/tasks, so it would imply a security guarantee the
+current architecture cannot provide.
+
+Validation:
+
+- Assessment PDF page 3 was extracted locally and confirmed to call out sensible
+  S3 access, least-needed IAM, no hardcoded credentials, and cost awareness; it
+  does not prescribe ECS or a particular limiter.
+- Existing negative tests cover missing/invalid/unconfigured keys, invalid and
+  oversized inputs, sanitized API failures, request-body cap without a length
+  header, cross-owner status lookups, and retrieval owner/READY filtering.
+- Secret review checked ignored local paths and scanned tracked text for AWS
+  key IDs, private-key headers, and nonempty credential assignments. No match
+  was found. This basic scan is not a general secret detector.
+- No deployed AWS controls, CloudWatch behavior, or Bedrock calls were tested.
+
+Tradeoff: the review is complete for the local slice while remaining candid
+about deployment work. Edge rate limiting is deferred because the present
+single shared demo API key, multiple possible workers, and absent shared rate
+store make an in-memory limiter misleading. This leaves repeated-request abuse
+unmitigated until secured ingress is configured.
+
+Walkthrough: Does the current API key provide multi-tenant security? No; it maps
+every accepted request to one demo principal, while SQL still applies owner
+filters. Does setting `ServerSideEncryption="AES256"` make an S3 bucket private?
+No; bucket policy, Block Public Access, and IAM are separate controls that still
+need deployment validation.
+
+Next: D4 needs explicit AWS resource/deployment approval and cost review. D1
+ground-truth review and approved live D2 evaluation also remain open; no AWS
+resources or model calls were made in this task.

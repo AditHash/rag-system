@@ -1,7 +1,7 @@
 """FastAPI routes for ingestion, retrieval, and document Q&A."""
 
 import re
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
@@ -25,13 +25,44 @@ class ChatRequest(SearchRequest):
     thinking_mode: bool = False
 
 
+class IngestResponse(BaseModel):
+    document_id: str
+    source: str
+    status: Literal["indexed"]
+    chunk_count: int = Field(ge=0)
+
+
+class SearchResultResponse(BaseModel):
+    text: str
+    source: str
+    page: int | None = None
+    document_id: str | None = None
+    chunk_index: int | None = None
+    distance: float
+
+
+class SearchResponse(BaseModel):
+    question: str
+    results: list[SearchResultResponse]
+
+
+class CitedSourceResponse(SearchResultResponse):
+    source_id: int
+
+
+class ChatResponse(BaseModel):
+    status: Literal["ANSWERED", "INSUFFICIENT_CONTEXT"]
+    answer: str
+    sources: list[CitedSourceResponse]
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.post("/api/v1/ingest")
-async def ingest(file: Annotated[UploadFile, File()]) -> dict[str, object]:
+@app.post("/api/v1/ingest", response_model=IngestResponse)
+async def ingest(file: Annotated[UploadFile, File()]) -> IngestResponse:
     """Extract, split, embed, and store one PDF or TXT document."""
     filename = file.filename or ""
     if not filename.lower().endswith((".pdf", ".txt")):
@@ -55,16 +86,16 @@ async def ingest(file: Annotated[UploadFile, File()]) -> dict[str, object]:
             detail="Ingestion failed. Check database, AWS credentials, and Bedrock access.",
         ) from error
 
-    return {
-        "document_id": document_id,
-        "source": filename,
-        "status": "indexed",
-        "chunk_count": chunk_count,
-    }
+    return IngestResponse(
+        document_id=document_id,
+        source=filename,
+        status="indexed",
+        chunk_count=chunk_count,
+    )
 
 
-@app.post("/api/v1/search")
-def search(request: SearchRequest) -> dict[str, object]:
+@app.post("/api/v1/search", response_model=SearchResponse)
+def search(request: SearchRequest) -> SearchResponse:
     """Return nearest chunks so retrieval can be checked on its own."""
     if not request.question.strip():
         raise HTTPException(status_code=422, detail="Question cannot be blank.")
@@ -76,11 +107,11 @@ def search(request: SearchRequest) -> dict[str, object]:
             detail="Search failed. Check database, AWS credentials, and Bedrock access.",
         ) from error
 
-    return {"question": request.question, "results": results}
+    return SearchResponse(question=request.question, results=results)
 
 
-@app.post("/api/v1/chat")
-def chat(request: ChatRequest) -> dict[str, object]:
+@app.post("/api/v1/chat", response_model=ChatResponse)
+def chat(request: ChatRequest) -> ChatResponse:
     """Retrieve source chunks and ask a Bedrock model to answer from them."""
     if not request.question.strip():
         raise HTTPException(status_code=422, detail="Question cannot be blank.")
@@ -88,7 +119,9 @@ def chat(request: ChatRequest) -> dict[str, object]:
     try:
         chunks = search_documents(request.question, request.top_k)
         if not chunks:
-            return {"status": "INSUFFICIENT_CONTEXT", "answer": REFUSAL, "sources": []}
+            return ChatResponse(
+                status="INSUFFICIENT_CONTEXT", answer=REFUSAL, sources=[]
+            )
 
         answer = generate_answer(
             request.question, chunks, thinking_mode=request.thinking_mode
@@ -100,15 +133,15 @@ def chat(request: ChatRequest) -> dict[str, object]:
         ) from error
 
     if answer.casefold() == "insufficient_context":
-        return {"status": "INSUFFICIENT_CONTEXT", "answer": REFUSAL, "sources": []}
+        return ChatResponse(status="INSUFFICIENT_CONTEXT", answer=REFUSAL, sources=[])
 
     citations = [int(value) for value in re.findall(r"\[(\d+)\]", answer)]
     if not citations or any(value < 1 or value > len(chunks) for value in citations):
-        return {"status": "INSUFFICIENT_CONTEXT", "answer": REFUSAL, "sources": []}
+        return ChatResponse(status="INSUFFICIENT_CONTEXT", answer=REFUSAL, sources=[])
 
     source_ids = list(dict.fromkeys(citations))
     sources = [
         {"source_id": source_id, **chunks[source_id - 1]}
         for source_id in source_ids
     ]
-    return {"status": "ANSWERED", "answer": answer, "sources": sources}
+    return ChatResponse(status="ANSWERED", answer=answer, sources=sources)

@@ -1,10 +1,9 @@
 """FastAPI routes for ingestion, retrieval, and document Q&A."""
 
 import re
-import secrets
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
@@ -15,14 +14,6 @@ from src.retrieval import search_documents
 
 app = FastAPI(title="Document Q&A API", version="0.1.0")
 REFUSAL = "I could not find enough information in the uploaded documents."
-
-
-def check_api_key(api_key: str | None = Header(default=None, alias="X-API-Key")) -> None:
-    """Protect the document routes with the key configured in the environment."""
-    if not config.API_KEY:
-        raise HTTPException(status_code=503, detail="API_KEY is not configured.")
-    if api_key is None or not secrets.compare_digest(api_key, config.API_KEY):
-        raise HTTPException(status_code=401, detail="Invalid API key.")
 
 
 class SearchRequest(BaseModel):
@@ -39,7 +30,7 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.post("/api/v1/ingest", dependencies=[Depends(check_api_key)])
+@app.post("/api/v1/ingest")
 async def ingest(file: Annotated[UploadFile, File()]) -> dict[str, object]:
     """Extract, split, embed, and store one PDF or TXT document."""
     filename = file.filename or ""
@@ -72,7 +63,7 @@ async def ingest(file: Annotated[UploadFile, File()]) -> dict[str, object]:
     }
 
 
-@app.post("/api/v1/search", dependencies=[Depends(check_api_key)])
+@app.post("/api/v1/search")
 def search(request: SearchRequest) -> dict[str, object]:
     """Return nearest chunks so retrieval can be checked on its own."""
     if not request.question.strip():
@@ -88,7 +79,7 @@ def search(request: SearchRequest) -> dict[str, object]:
     return {"question": request.question, "results": results}
 
 
-@app.post("/api/v1/chat", dependencies=[Depends(check_api_key)])
+@app.post("/api/v1/chat")
 def chat(request: ChatRequest) -> dict[str, object]:
     """Retrieve source chunks and ask a Bedrock model to answer from them."""
     if not request.question.strip():

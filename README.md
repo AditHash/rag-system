@@ -20,8 +20,8 @@ billable Bedrock calls.
 
 ## Configure and run
 
-From `backend/`, copy `.env.example` to `.env` and fill in the local database URL
-and a private API key. The app loads settings from that file when it starts.
+From `backend/`, copy `.env.example` to `.env` and fill in the local database URL.
+The app loads settings from that file when it starts.
 Use your normal AWS credential chain (for example, `AWS_PROFILE`) for Bedrock
 access; AWS credentials themselves are not loaded from this file by the app.
 
@@ -63,7 +63,6 @@ default, embeds the chunks, and stores them in PostgreSQL.
 
 ```bash
 curl --fail --show-error \
-  -H "X-API-Key: $API_KEY" \
   -F 'file=@./example.pdf' \
   http://127.0.0.1:8000/api/v1/ingest
 ```
@@ -86,7 +85,6 @@ embeddings and PostgreSQL writes finish.
 
 ```bash
 curl --fail --show-error \
-  -H "X-API-Key: $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"question":"What does the document say about retention?","top_k":5}' \
   http://127.0.0.1:8000/api/v1/search
@@ -104,7 +102,6 @@ HTTP request to `/api/v1/search`. By default it uses Qwen3 32B. Set
 
 ```bash
 curl --fail --show-error \
-  -H "X-API-Key: $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"question":"How long are records kept?","top_k":5,"thinking_mode":false}' \
   http://127.0.0.1:8000/api/v1/chat

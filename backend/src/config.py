@@ -17,7 +17,6 @@ THINKING_MODEL_ID = os.getenv(
     "BEDROCK_THINKING_MODEL_ID", "openai.gpt-oss-20b-1:0"
 )
 COLLECTION_NAME = os.getenv("VECTOR_COLLECTION", "documents")
-API_KEY = os.getenv("API_KEY", "")
 CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "1000"))
 CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "150"))
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024

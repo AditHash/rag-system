@@ -71,6 +71,10 @@ Open `http://127.0.0.1:5173`. The development server forwards `/api` and
 frontend can upload PDF/TXT files, ask questions in normal or thinking mode,
 and show cited source passages. The indexed-file list only shows uploads from
 the current browser session; the backend database can hold older documents.
+The latest upload is selected as the chat source automatically. The source
+selector can switch to another upload from this session or search all documents
+in the database. Session upload names and IDs are kept in browser session storage
+so a refresh does not require re-uploading; file contents are not stored there.
 `npm run build` creates static files in `frontend/dist/`. In deployment, serve
 those files and route `/api` and `/health` to FastAPI on the same origin.
 Uploading and asking questions invoke Bedrock models and may incur charges.
@@ -124,6 +128,8 @@ them to the answer model in reranked order. Five limits reranking cost and the
 amount of text in the answer prompt. Qwen3 32B answers by default; set
 `thinking_mode` to `true` to select GPT-OSS 20B. All Bedrock models use the
 same `AWS_REGION` setting, which defaults to `us-east-1`.
+An optional `document_id` scopes search and chat to one uploaded document;
+without it, both endpoints search the whole collection.
 
 ```bash
 curl --fail --show-error \
@@ -139,6 +145,9 @@ returns `INSUFFICIENT_CONTEXT` with an empty `sources` list. References are
 numbered after reranking, so each reference points to the chunk shown in the
 response. Each cited source also has a `rerank_score` for inspection; it is not
 an answer-confidence score.
+If the model returns text without a valid citation, the API returns
+`UNVERIFIED_ANSWER` instead of incorrectly claiming that the documents lack
+the answer. It does not display that uncited text as a grounded answer.
 
 Example response:
 

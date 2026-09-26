@@ -13,9 +13,11 @@ const thinkingMode = document.querySelector("#thinking-mode");
 const askButton = document.querySelector("#ask-button");
 const chatHistory = document.querySelector("#chat-history");
 const connectionStatus = document.querySelector("#connection-status");
+const documentScope = document.querySelector("#document-scope");
 
 let fileToUpload = null;
 let indexedCount = 0;
+let sessionDocuments = [];
 
 function setUploadMessage(message, isError = false) {
   uploadMessage.textContent = message;
@@ -72,6 +74,12 @@ function addIndexedDocument(result) {
   details.append(name, count);
   item.append(icon, details);
   documentList.prepend(item);
+
+  const option = document.createElement("option");
+  option.value = result.document_id;
+  option.textContent = result.source;
+  documentScope.append(option);
+  documentScope.value = result.document_id;
 }
 
 function addMessage(kind, text) {
@@ -143,6 +151,12 @@ uploadButton.addEventListener("click", async () => {
     form.append("file", fileToUpload);
     const result = await readResponse(await fetch("/api/v1/ingest", { method: "POST", body: form }));
     addIndexedDocument(result);
+    sessionDocuments.push(result);
+    try {
+      sessionStorage.setItem("indexedDocuments", JSON.stringify(sessionDocuments));
+    } catch {
+      // Upload still succeeded if the browser blocks session storage.
+    }
     setUploadMessage(`${result.source} is ready for questions.`);
     fileToUpload = null;
     fileInput.value = "";
@@ -154,6 +168,16 @@ uploadButton.addEventListener("click", async () => {
     uploadButton.disabled = !fileToUpload;
   }
 });
+
+try {
+  const saved = JSON.parse(sessionStorage.getItem("indexedDocuments") || "[]");
+  if (Array.isArray(saved)) {
+    sessionDocuments = saved.filter((item) => item.document_id && item.source);
+    sessionDocuments.forEach(addIndexedDocument);
+  }
+} catch {
+  // A blocked or invalid session store should not stop the interface.
+}
 
 questionInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.shiftKey) {
@@ -177,10 +201,15 @@ chatForm.addEventListener("submit", async (event) => {
     const response = await readResponse(await fetch("/api/v1/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, top_k: 5, thinking_mode: thinkingMode.checked }),
+      body: JSON.stringify({
+        question,
+        top_k: 5,
+        thinking_mode: thinkingMode.checked,
+        document_id: documentScope.value || null,
+      }),
     }));
     pending.querySelector(".message-text").textContent = response.answer;
-    if (response.status === "INSUFFICIENT_CONTEXT") pending.classList.add("refusal");
+    if (response.status !== "ANSWERED") pending.classList.add("refusal");
     addSources(pending, response.sources);
   } catch (error) {
     pending.classList.add("refusal");

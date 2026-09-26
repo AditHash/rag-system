@@ -3,6 +3,7 @@
 import logging
 import re
 from typing import Annotated, Literal
+from uuid import UUID
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 class SearchRequest(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
     top_k: int = Field(default=5, ge=1, le=10)
+    document_id: UUID | None = None
 
 
 class ChatRequest(SearchRequest):
@@ -55,7 +57,7 @@ class CitedSourceResponse(SearchResultResponse):
 
 
 class ChatResponse(BaseModel):
-    status: Literal["ANSWERED", "INSUFFICIENT_CONTEXT"]
+    status: Literal["ANSWERED", "INSUFFICIENT_CONTEXT", "UNVERIFIED_ANSWER"]
     answer: str
     sources: list[CitedSourceResponse]
 
@@ -105,7 +107,11 @@ def search(request: SearchRequest) -> SearchResponse:
     if not request.question.strip():
         raise HTTPException(status_code=422, detail="Question cannot be blank.")
     try:
-        results = search_documents(request.question, request.top_k)
+        results = search_documents(
+            request.question,
+            request.top_k,
+            str(request.document_id) if request.document_id else None,
+        )
     except Exception as error:
         raise HTTPException(
             status_code=503,
@@ -123,7 +129,12 @@ def chat(request: ChatRequest) -> ChatResponse:
 
     try:
         chunks = rerank_documents(
-            request.question, search_documents(request.question, request.top_k)
+            request.question,
+            search_documents(
+                request.question,
+                request.top_k,
+                str(request.document_id) if request.document_id else None,
+            ),
         )
         if not chunks:
             return ChatResponse(
@@ -144,7 +155,15 @@ def chat(request: ChatRequest) -> ChatResponse:
 
     citations = [int(value) for value in re.findall(r"\[(\d+)\]", answer)]
     if not citations or any(value < 1 or value > len(chunks) for value in citations):
-        return ChatResponse(status="INSUFFICIENT_CONTEXT", answer=REFUSAL, sources=[])
+        logger.info("Chat answer had no valid source citations")
+        return ChatResponse(
+            status="UNVERIFIED_ANSWER",
+            answer=(
+                "The model did not return a verifiable cited answer. "
+                "Try normal mode or rephrase the question."
+            ),
+            sources=[],
+        )
 
     source_ids = list(dict.fromkeys(citations))
     sources = [

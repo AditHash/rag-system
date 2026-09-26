@@ -6,13 +6,14 @@ PostgreSQL/pgvector storage and search.
 
 It provides an ingestion route, a search route for inspecting retrieval, and a
 chat route that retrieves chunks and uses them to generate a cited answer.
-Reranking and a measured evaluation are not implemented yet.
+A measured evaluation is not implemented yet.
 
 ## Requirements
 
 - Python 3.12 and `uv`
 - PostgreSQL with the `vector` extension installed
-- AWS credentials permitted to invoke the configured Bedrock embedding and chat models
+- AWS credentials permitted to invoke the configured Bedrock embedding,
+  reranking, and chat models in `us-east-1`
 - A database user that can connect to the database and use the `vector` extension
 
 No AWS resources are provisioned by these instructions. Embedding requests are
@@ -40,8 +41,8 @@ postgresql+psycopg://user:password@localhost:5432/document_db
 ```
 
 The LangChain vector store creates its own tables in the configured database.
-The PostgreSQL server must already have pgvector installed. Model ID, region,
-chunk size, overlap, collection name, database URL, and API key are configurable
+The PostgreSQL server must already have pgvector installed. Model IDs, region,
+chunk size, overlap, collection name, and database URL are configurable
 in `backend/src/config.py` through environment variables. `AWS_PROFILE` is read
 by the standard AWS credential chain and does not need to be copied into code.
 
@@ -97,8 +98,12 @@ retrieval diagnostic, not a calibrated answer-confidence score.
 ## Ask a question and get an answer
 
 The chat route calls the same retrieval function directly; it does not make an
-HTTP request to `/api/v1/search`. By default it uses Qwen3 32B. Set
-`thinking_mode` to `true` to select GPT-OSS 20B.
+HTTP request to `/api/v1/search`. It takes up to five pgvector matches, sends
+their text to Cohere Rerank 3.5 through Bedrock in `us-east-1`, and presents
+them to the answer model in reranked order. Five limits reranking cost and the
+amount of text in the answer prompt. Qwen3 32B answers by default; set
+`thinking_mode` to `true` to select GPT-OSS 20B. All Bedrock models use the
+same `AWS_REGION` setting, which defaults to `us-east-1`.
 
 ```bash
 curl --fail --show-error \
@@ -110,7 +115,10 @@ curl --fail --show-error \
 An answered response includes an answer with numbered references such as `[1]`
 and source chunks whose `source_id` matches those references. If there are no
 retrieved chunks, or the model refuses or omits a valid reference, the endpoint
-returns `INSUFFICIENT_CONTEXT` with an empty `sources` list.
+returns `INSUFFICIENT_CONTEXT` with an empty `sources` list. References are
+numbered after reranking, so each reference points to the chunk shown in the
+response. Each cited source also has a `rerank_score` for inspection; it is not
+an answer-confidence score.
 
 Example response:
 
@@ -123,7 +131,8 @@ Example response:
       "source_id": 1,
       "source": "retention-policy.pdf",
       "page": 2,
-      "text": "Records are kept for 30 days..."
+      "text": "Records are kept for 30 days...",
+      "rerank_score": 0.91
     }
   ]
 }
@@ -147,20 +156,24 @@ its cited text or use a tested relevance threshold.
   (`BEDROCK_THINKING_MODEL_ID`) is selected by `thinking_mode=true`.
 - LangChain's PostgreSQL vector store keeps vector persistence and similarity
   search in PostgreSQL, which is already part of the planned local setup.
+- Bedrock's Rerank API orders the pgvector candidates by how directly they
+  relate to the question. The installed LangChain AWS package has no direct
+  reranker integration, so this one call uses Boto3. `/search` still shows raw
+  pgvector results to make the first retrieval stage easy to inspect.
 - Raw files are not saved to S3 in this local first version. A new upload gets a
   new document ID; there is no delete endpoint yet.
 - PDF text extraction does not OCR scanned pages. A file with no extracted
   text is rejected.
-- The API key is a single shared demo key, not user identity or multi-tenant
-  access control. Keep this API on a trusted local network.
-- There is no reranker, measured evaluation set, or cloud deployment yet.
-  The prompt and citation-ID check are basic safeguards, not proof that an
-  answer is correct or fully supported.
+- The demo API has no authentication. Keep it on a trusted local network.
+- There is no measured evaluation set or cloud deployment yet. Reranking
+  improves ordering, but does not prove that a chunk answers the question.
+  The prompt and citation-ID check are basic safeguards; there is no tested
+  relevance threshold or claim-by-claim evidence verification yet.
 
 ## Manual checks
 
-The test suite is intentionally deferred for this step. Manually ingest a
-small, non-sensitive text/PDF file, then call `/api/v1/search` to inspect the
+Manually ingest a small, non-sensitive text/PDF file, then call
+`/api/v1/search` to inspect the
 retrieved chunks or `/api/v1/chat` to ask for an answer. Ingestion and search
-call the embedding model. Chat calls the embedding model and one chat model, so
-these requests may incur charges.
+call the embedding model. Chat calls the embedding model, Cohere reranker, and
+one chat model, so these requests may incur charges.

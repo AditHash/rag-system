@@ -11,7 +11,7 @@ from starlette.concurrency import run_in_threadpool
 from src import config
 from src.generation import generate_answer
 from src.ingest import ingest_file
-from src.retrieval import search_documents
+from src.retrieval import rerank_documents, search_documents
 
 app = FastAPI(title="Document Q&A API", version="0.1.0")
 REFUSAL = "I could not find enough information in the uploaded documents."
@@ -24,6 +24,7 @@ class SearchRequest(BaseModel):
 
 
 class ChatRequest(SearchRequest):
+    top_k: int = Field(default=5, ge=1, le=5)
     thinking_mode: bool = False
 
 
@@ -50,6 +51,7 @@ class SearchResponse(BaseModel):
 
 class CitedSourceResponse(SearchResultResponse):
     source_id: int
+    rerank_score: float
 
 
 class ChatResponse(BaseModel):
@@ -120,7 +122,9 @@ def chat(request: ChatRequest) -> ChatResponse:
         raise HTTPException(status_code=422, detail="Question cannot be blank.")
 
     try:
-        chunks = search_documents(request.question, request.top_k)
+        chunks = rerank_documents(
+            request.question, search_documents(request.question, request.top_k)
+        )
         if not chunks:
             return ChatResponse(
                 status="INSUFFICIENT_CONTEXT", answer=REFUSAL, sources=[]

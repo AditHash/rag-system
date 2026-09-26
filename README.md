@@ -1,18 +1,18 @@
 # Document Q&A backend
 
-A small FastAPI backend for the first two RAG steps: ingest documents into a
-vector store, then find relevant chunks for a question. It uses LangChain for
-document chunks, Bedrock embeddings, and PostgreSQL/pgvector storage and search.
+A small FastAPI backend for document ingestion and retrieval-augmented answers.
+It uses LangChain for document chunks, Bedrock embeddings and chat models, and
+PostgreSQL/pgvector storage and search.
 
-This version does not generate answers, rerank results, or refuse unsupported
-questions. It returns retrieved passages and their source metadata so the
-retrieval flow can be inspected before answer generation is added.
+It provides an ingestion route, a search route for inspecting retrieval, and a
+chat route that retrieves chunks and uses them to generate a cited answer.
+Reranking and a measured evaluation are not implemented yet.
 
 ## Requirements
 
 - Python 3.12 and `uv`
 - PostgreSQL with the `vector` extension installed
-- AWS credentials permitted to invoke the configured Bedrock embedding model
+- AWS credentials permitted to invoke the configured Bedrock embedding and chat models
 - A database user that can connect to the database and use the `vector` extension
 
 No AWS resources are provisioned by these instructions. Embedding requests are
@@ -54,7 +54,7 @@ curl http://127.0.0.1:8000/health
 # {"status":"ok"}
 ```
 
-Open `http://127.0.0.1:8000/docs` to explore the two endpoints.
+Open `http://127.0.0.1:8000/docs` to explore the endpoints.
 
 ## Ingest a document
 
@@ -98,6 +98,47 @@ Each result includes the chunk text, filename, page, document ID, chunk index,
 and pgvector distance. Smaller distance means a closer vector match; this is a
 retrieval diagnostic, not a calibrated answer-confidence score.
 
+## Ask a question and get an answer
+
+The chat route calls the same retrieval function directly; it does not make an
+HTTP request to `/api/v1/search`. By default it uses Qwen3 32B. Set
+`thinking_mode` to `true` to select GPT-OSS 20B.
+
+```bash
+curl --fail --show-error \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"question":"How long are records kept?","top_k":5,"thinking_mode":false}' \
+  http://127.0.0.1:8000/api/v1/chat
+```
+
+An answered response includes an answer with numbered references such as `[1]`
+and source chunks whose `source_id` matches those references. If there are no
+retrieved chunks, or the model refuses or omits a valid reference, the endpoint
+returns `INSUFFICIENT_CONTEXT` with an empty `sources` list.
+
+Example response:
+
+```json
+{
+  "status": "ANSWERED",
+  "answer": "The records are kept for 30 days [1].",
+  "sources": [
+    {
+      "source_id": 1,
+      "source": "retention-policy.pdf",
+      "page": 2,
+      "text": "Records are kept for 30 days..."
+    }
+  ]
+}
+```
+
+This is a first grounding layer, not a guarantee against unsupported claims:
+the prompt requests document-only answers, and the API checks that references
+map to retrieved chunks. It does not yet verify that each claim is supported by
+its cited text or use a tested relevance threshold.
+
 ## Choices and limits
 
 - `RecursiveCharacterTextSplitter` tries natural text boundaries and keeps
@@ -107,9 +148,8 @@ retrieval diagnostic, not a calibrated answer-confidence score.
   more tokens per later answer call.
 - Amazon Titan Text Embeddings V2 is the default embedding model. The same
   configured embedding object/model is used for document and query vectors.
-- Qwen3 32B (`BEDROCK_CHAT_MODEL_ID`) and GPT-OSS 20B
-  (`BEDROCK_THINKING_MODEL_ID`) are configured for the planned normal and
-  thinking answer modes. The current API does not call either model yet.
+- Qwen3 32B (`BEDROCK_CHAT_MODEL_ID`) is used for normal answers; GPT-OSS 20B
+  (`BEDROCK_THINKING_MODEL_ID`) is selected by `thinking_mode=true`.
 - LangChain's PostgreSQL vector store keeps vector persistence and similarity
   search in PostgreSQL, which is already part of the planned local setup.
 - Raw files are not saved to S3 in this local first version. A new upload gets a
@@ -118,12 +158,14 @@ retrieval diagnostic, not a calibrated answer-confidence score.
   text is rejected.
 - The API key is a single shared demo key, not user identity or multi-tenant
   access control. Keep this API on a trusted local network.
-- There is no answer generation, grounding check, citation verification,
-  refusal logic, reranker, evaluation set, or cloud deployment yet. These are
-  remaining assessment work.
+- There is no reranker, measured evaluation set, or cloud deployment yet.
+  The prompt and citation-ID check are basic safeguards, not proof that an
+  answer is correct or fully supported.
 
 ## Manual checks
 
 The test suite is intentionally deferred for this step. Manually ingest a
-small, non-sensitive text/PDF file, then search using a question whose answer is
-present in it. Uploading and searching call Bedrock and may incur charges.
+small, non-sensitive text/PDF file, then call `/api/v1/search` to inspect the
+retrieved chunks or `/api/v1/chat` to ask for an answer. Ingestion and search
+call the embedding model. Chat calls the embedding model and one chat model, so
+these requests may incur charges.

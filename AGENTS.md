@@ -10,8 +10,8 @@ Work in this order, one reviewable task at a time:
 
 1. Ingestion: accept PDF/TXT, extract text with page metadata, split with LangChain, embed with the configured Bedrock embedding model, and store with LangChain's PostgreSQL/pgvector integration.
 2. Retrieval: embed a question with the same model, run similarity search, and return chunk text plus source metadata.
-3. Only after review, consider reranking.
-4. Answer generation, verified citations, refusal behavior, evaluation, and AWS deployment are later tasks. Never describe them as implemented until they are.
+3. Chat: call the retrieval function directly, pass retrieved chunks to the configured Bedrock chat model, and return an answer with source references. Keep prompt-based refusal and citation-ID checks simple and document their limits.
+4. Only after review, consider reranking. Measured evaluation and AWS deployment are later tasks. Never describe them as implemented until they are.
 
 Keep functions small, names clear, and folders few. Do not add custom chunking/vector-search code when a LangChain integration covers the need. Do not add agents, workers, queues, repository layers, or a frontend unless the user asks.
 

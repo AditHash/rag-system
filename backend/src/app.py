@@ -1,5 +1,6 @@
 """FastAPI routes for ingestion, retrieval, and document Q&A."""
 
+import logging
 import re
 from typing import Annotated, Literal
 
@@ -14,6 +15,7 @@ from src.retrieval import search_documents
 
 app = FastAPI(title="Document Q&A API", version="0.1.0")
 REFUSAL = "I could not find enough information in the uploaded documents."
+logger = logging.getLogger(__name__)
 
 
 class SearchRequest(BaseModel):
@@ -81,6 +83,7 @@ async def ingest(file: Annotated[UploadFile, File()]) -> IngestResponse:
     except (UnicodeError, ValueError) as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     except Exception as error:
+        logger.exception("Document ingestion failed")
         raise HTTPException(
             status_code=503,
             detail="Ingestion failed. Check database, AWS credentials, and Bedrock access.",

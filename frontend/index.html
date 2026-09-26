@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f4f6f7" />
+    <meta name="description" content="Ask questions about your documents and inspect the sources behind each answer." />
+    <title>Document Q&A</title>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="Document Q&A home">
+          <span class="brand-mark" aria-hidden="true">▤</span>
+          <span>Document <strong>Q&A</strong></span>
+        </a>
+        <div class="connection" id="connection-status" role="status">
+          <span class="connection-dot"></span>
+          <span>Checking backend…</span>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <section class="intro" aria-labelledby="page-title">
+          <p class="eyebrow">YOUR DOCUMENT WORKSPACE</p>
+          <h1 id="page-title">Find the answer.<br /><span>See the evidence.</span></h1>
+          <p class="intro-copy">Add a document, ask a question, and trace each answer back to the source text.</p>
+        </section>
+
+        <div class="columns">
+          <aside class="card documents" aria-labelledby="documents-title">
+            <div class="card-heading">
+              <div>
+                <p class="eyebrow">STEP 01</p>
+                <h2 id="documents-title">Your documents</h2>
+              </div>
+              <span class="heading-icon" aria-hidden="true">↥</span>
+            </div>
+            <p class="muted">PDF or TXT, up to 10 MB each.</p>
+
+            <div class="drop-zone" id="drop-zone">
+              <div class="upload-icon" aria-hidden="true">↥</div>
+              <p><strong>Drop a file here</strong></p>
+              <p class="muted">or choose one from your computer</p>
+              <label class="secondary-button" for="file-input">Browse files</label>
+              <input id="file-input" type="file" accept=".pdf,.txt,application/pdf,text/plain" />
+            </div>
+
+            <div class="selected-file" id="selected-file" hidden></div>
+            <button class="primary-button full-width" id="upload-button" type="button" disabled>Index document <span aria-hidden="true">↗</span></button>
+            <p class="inline-message" id="upload-message" role="status" aria-live="polite"></p>
+
+            <div class="list-heading">
+              <h3>Indexed this session</h3>
+              <span id="document-count">0</span>
+            </div>
+            <div class="document-list" id="document-list">
+              <p class="empty-list">Your indexed files will appear here.</p>
+            </div>
+            <p class="small-note">Files already in the database can be searched even if they are not shown in this session list.</p>
+          </aside>
+
+          <section class="card conversation" aria-labelledby="chat-title">
+            <div class="card-heading chat-heading">
+              <div>
+                <p class="eyebrow">STEP 02</p>
+                <h2 id="chat-title">Ask your documents</h2>
+              </div>
+              <span class="heading-icon" aria-hidden="true">✳</span>
+            </div>
+
+            <div class="chat-history" id="chat-history" aria-live="polite">
+              <div class="welcome" id="welcome">
+                <div class="welcome-symbol" aria-hidden="true">✳</div>
+                <h3>Ready when you are.</h3>
+                <p>Index a document and ask a specific question. Answers include the source passages used.</p>
+              </div>
+            </div>
+
+            <form class="composer" id="chat-form">
+              <label class="sr-only" for="question-input">Question</label>
+              <textarea id="question-input" rows="2" maxlength="2000" placeholder="Ask a question about your documents…" required></textarea>
+              <div class="composer-bottom">
+                <label class="mode-control" title="Use the configured thinking model for this answer">
+                  <input id="thinking-mode" type="checkbox" />
+                  <span class="switch" aria-hidden="true"></span>
+                  Thinking mode
+                </label>
+                <button class="primary-button ask-button" id="ask-button" type="submit">Ask <span aria-hidden="true">↗</span></button>
+              </div>
+            </form>
+            <p class="composer-note">Answers are based on retrieved passages. Check the sources before relying on them.</p>
+          </section>
+        </div>
+      </main>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

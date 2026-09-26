@@ -55,6 +55,26 @@ curl http://127.0.0.1:8000/health
 
 Open `http://127.0.0.1:8000/docs` to explore the endpoints.
 
+## Run the frontend
+
+The small browser interface lives in `frontend/`. With the backend running in
+another terminal, start it with Node.js 18 or newer:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open `http://127.0.0.1:5173`. The development server forwards `/api` and
+`/health` requests to the local backend, so no CORS setting is needed. The
+frontend can upload PDF/TXT files, ask questions in normal or thinking mode,
+and show cited source passages. The indexed-file list only shows uploads from
+the current browser session; the backend database can hold older documents.
+`npm run build` creates static files in `frontend/dist/`. In deployment, serve
+those files and route `/api` and `/health` to FastAPI on the same origin.
+Uploading and asking questions invoke Bedrock models and may incur charges.
+
 ## Ingest a document
 
 PDF and UTF-8 TXT files up to 10 MiB are accepted. The endpoint extracts text,

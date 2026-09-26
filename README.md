@@ -20,17 +20,15 @@ billable Bedrock calls.
 
 ## Configure and run
 
-From `backend/`, copy `.env.example` to `.env`, fill in the local database URL
-and a private API key, then export the settings into your shell. Use your normal
-AWS credential chain (for example, `AWS_PROFILE`) for Bedrock access.
+From `backend/`, copy `.env.example` to `.env` and fill in the local database URL
+and a private API key. The app loads settings from that file when it starts.
+Use your normal AWS credential chain (for example, `AWS_PROFILE`) for Bedrock
+access; AWS credentials themselves are not loaded from this file by the app.
 
 ```bash
 cd backend
 cp .env.example .env
 # Edit .env; do not commit it.
-set -a
-source .env
-set +a
 uv sync --frozen
 uv run main.py
 ```

@@ -107,6 +107,9 @@ retrieval diagnostic, not a calibrated answer-confidence score.
   more tokens per later answer call.
 - Amazon Titan Text Embeddings V2 is the default embedding model. The same
   configured embedding object/model is used for document and query vectors.
+- Qwen3 32B (`BEDROCK_CHAT_MODEL_ID`) and GPT-OSS 20B
+  (`BEDROCK_THINKING_MODEL_ID`) are configured for the planned normal and
+  thinking answer modes. The current API does not call either model yet.
 - LangChain's PostgreSQL vector store keeps vector persistence and similarity
   search in PostgreSQL, which is already part of the planned local setup.
 - Raw files are not saved to S3 in this local first version. A new upload gets a

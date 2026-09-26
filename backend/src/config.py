@@ -7,6 +7,10 @@ AWS_REGION = os.getenv("AWS_REGION", "ap-south-1")
 EMBEDDING_MODEL_ID = os.getenv(
     "BEDROCK_EMBEDDING_MODEL_ID", "amazon.titan-embed-text-v2:0"
 )
+CHAT_MODEL_ID = os.getenv("BEDROCK_CHAT_MODEL_ID", "qwen.qwen3-32b-v1:0")
+THINKING_MODEL_ID = os.getenv(
+    "BEDROCK_THINKING_MODEL_ID", "openai.gpt-oss-20b-1:0"
+)
 COLLECTION_NAME = os.getenv("VECTOR_COLLECTION", "documents")
 API_KEY = os.getenv("API_KEY", "")
 CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "1000"))

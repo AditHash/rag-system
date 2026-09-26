@@ -10,7 +10,7 @@
 
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; }
-button, textarea { font: inherit; }
+button, textarea, input, select { font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: .55; }
 [hidden] { display: none !important; }
@@ -32,6 +32,19 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .connection-dot { width: 8px; height: 8px; border-radius: 50%; background: #b8c3c5; }
 .connection.online .connection-dot { background: #32a477; box-shadow: 0 0 0 4px #e0f5e9; }
 .connection.offline .connection-dot { background: #d47c6e; box-shadow: 0 0 0 4px #fae9e5; }
+.topbar-actions { display: flex; align-items: center; gap: 23px; }
+.account { display: flex; align-items: center; gap: 11px; padding-left: 18px; border-left: 1px solid #e4e9e8; color: #355e5a; font-size: 12px; font-weight: 700; }
+.account button { padding: 6px 9px; border: 1px solid #cfdfdb; border-radius: 7px; background: #fff; color: #176f63; font-size: 11px; }
+
+.auth-panel { width: min(420px, calc(100% - 32px)); margin: 90px auto; padding: 36px; }
+.auth-panel h1 { font-size: 29px; }
+.auth-panel .muted { margin-bottom: 24px; font-size: 13px; line-height: 1.6; }
+.auth-panel form { display: grid; gap: 9px; }
+.auth-panel label { margin-top: 8px; font-size: 12px; font-weight: 700; }
+.auth-panel input { width: 100%; padding: 11px 12px; border: 1px solid #cfddda; border-radius: 8px; color: #24393c; font-size: 14px; }
+.auth-panel input:focus { outline: 2px solid #168073; outline-offset: 1px; }
+.auth-panel .full-width { margin-top: 13px; }
+.auth-toggle { display: block; margin: 12px auto 0; padding: 6px; border: 0; background: transparent; color: #177467; font-size: 12px; font-weight: 700; }
 
 .workspace { max-width: 1280px; margin: 0 auto; padding: 54px 32px 72px; }
 .intro { margin-bottom: 37px; }
@@ -125,6 +138,9 @@ textarea::placeholder { color: #a0acad; }
   .brand { font-size: 15px; }
   .connection { font-size: 0; }
   .connection-dot { width: 9px; height: 9px; }
+  .topbar-actions { gap: 12px; }
+  .account { gap: 7px; padding-left: 10px; }
+  .auth-panel { margin: 45px auto; padding: 26px; }
   .workspace { padding: 35px 14px 40px; }
   .intro { padding: 0 4px; margin-bottom: 28px; }
   .intro-copy { font-size: 14px; }

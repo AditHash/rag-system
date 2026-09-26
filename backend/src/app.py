@@ -2,21 +2,53 @@
 
 import logging
 import re
-from typing import Annotated, Literal
+from contextlib import asynccontextmanager
+from typing import Annotated, AsyncIterator, Literal
 from uuid import UUID
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from src import config
+from src.auth import (
+    authenticate_user,
+    bearer,
+    create_token,
+    create_user,
+    create_users_table,
+    current_user,
+    revoke_token,
+)
 from src.generation import generate_answer
 from src.ingest import ingest_file
 from src.retrieval import rerank_documents, search_documents
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    await run_in_threadpool(create_users_table)
+    yield
 
-app = FastAPI(title="Document Q&A API", version="0.1.0")
+
+app = FastAPI(title="Document Q&A API", version="0.1.0", lifespan=lifespan)
 REFUSAL = "I could not find enough information in the uploaded documents."
 logger = logging.getLogger(__name__)
+
+
+class AuthRequest(BaseModel):
+    username: str = Field(min_length=3, max_length=32, pattern=r"^[A-Za-z0-9_]+$")
+    password: str = Field(min_length=8, max_length=128)
+
+
+class UserResponse(BaseModel):
+    id: str
+    username: str
+
+
+class AuthResponse(BaseModel):
+    access_token: str
+    token_type: Literal["bearer"] = "bearer"
+    user: UserResponse
 
 
 class SearchRequest(BaseModel):
@@ -67,8 +99,36 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.post("/api/v1/signup", response_model=AuthResponse, status_code=201)
+def signup(request: AuthRequest) -> AuthResponse:
+    user = create_user(request.username, request.password)
+    return AuthResponse(access_token=create_token(user["id"]), user=UserResponse(**user))
+
+
+@app.post("/api/v1/login", response_model=AuthResponse)
+def login(request: AuthRequest) -> AuthResponse:
+    user = authenticate_user(request.username, request.password)
+    return AuthResponse(access_token=create_token(user["id"]), user=UserResponse(**user))
+
+
+@app.get("/api/v1/me", response_model=UserResponse)
+def me(user: Annotated[dict[str, str], Depends(current_user)]) -> UserResponse:
+    return UserResponse(**user)
+
+
+@app.post("/api/v1/logout", status_code=204)
+def logout(
+    user: Annotated[dict[str, str], Depends(current_user)],
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
+) -> None:
+    revoke_token(credentials)
+
+
 @app.post("/api/v1/ingest", response_model=IngestResponse)
-async def ingest(file: Annotated[UploadFile, File()]) -> IngestResponse:
+async def ingest(
+    file: Annotated[UploadFile, File()],
+    user: Annotated[dict[str, str], Depends(current_user)],
+) -> IngestResponse:
     """Extract, split, embed, and store one PDF or TXT document."""
     filename = file.filename or ""
     if not filename.lower().endswith((".pdf", ".txt")):
@@ -82,7 +142,7 @@ async def ingest(file: Annotated[UploadFile, File()]) -> IngestResponse:
 
     try:
         document_id, chunk_count = await run_in_threadpool(
-            ingest_file, filename, content
+            ingest_file, filename, content, user["id"]
         )
     except (UnicodeError, ValueError) as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
@@ -102,7 +162,10 @@ async def ingest(file: Annotated[UploadFile, File()]) -> IngestResponse:
 
 
 @app.post("/api/v1/search", response_model=SearchResponse)
-def search(request: SearchRequest) -> SearchResponse:
+def search(
+    request: SearchRequest,
+    user: Annotated[dict[str, str], Depends(current_user)],
+) -> SearchResponse:
     """Return nearest chunks so retrieval can be checked on its own."""
     if not request.question.strip():
         raise HTTPException(status_code=422, detail="Question cannot be blank.")
@@ -110,6 +173,7 @@ def search(request: SearchRequest) -> SearchResponse:
         results = search_documents(
             request.question,
             request.top_k,
+            user["id"],
             str(request.document_id) if request.document_id else None,
         )
     except Exception as error:
@@ -122,7 +186,10 @@ def search(request: SearchRequest) -> SearchResponse:
 
 
 @app.post("/api/v1/chat", response_model=ChatResponse)
-def chat(request: ChatRequest) -> ChatResponse:
+def chat(
+    request: ChatRequest,
+    user: Annotated[dict[str, str], Depends(current_user)],
+) -> ChatResponse:
     """Retrieve source chunks and ask a Bedrock model to answer from them."""
     if not request.question.strip():
         raise HTTPException(status_code=422, detail="Question cannot be blank.")
@@ -133,6 +200,7 @@ def chat(request: ChatRequest) -> ChatResponse:
             search_documents(
                 request.question,
                 request.top_k,
+                user["id"],
                 str(request.document_id) if request.document_id else None,
             ),
         )

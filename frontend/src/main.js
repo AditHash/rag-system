@@ -14,10 +14,27 @@ const askButton = document.querySelector("#ask-button");
 const chatHistory = document.querySelector("#chat-history");
 const connectionStatus = document.querySelector("#connection-status");
 const documentScope = document.querySelector("#document-scope");
+const workspace = document.querySelector("#workspace");
+const authPanel = document.querySelector("#auth-panel");
+const authForm = document.querySelector("#auth-form");
+const authTitle = document.querySelector("#auth-title");
+const authSubmit = document.querySelector("#auth-submit");
+const authToggle = document.querySelector("#auth-toggle");
+const authMessage = document.querySelector("#auth-message");
+const usernameInput = document.querySelector("#username-input");
+const passwordInput = document.querySelector("#password-input");
+const account = document.querySelector("#account");
+const accountName = document.querySelector("#account-name");
+const logoutButton = document.querySelector("#logout-button");
+const welcomeTemplate = document.querySelector("#welcome").cloneNode(true);
+const emptyListTemplate = document.querySelector(".empty-list").cloneNode(true);
 
 let fileToUpload = null;
 let indexedCount = 0;
 let sessionDocuments = [];
+let accessToken = null;
+let activeUser = null;
+let signupMode = false;
 
 function setUploadMessage(message, isError = false) {
   uploadMessage.textContent = message;
@@ -53,6 +70,90 @@ async function readResponse(response) {
     throw new Error(typeof detail === "string" ? detail : `Request failed (${response.status}).`);
   }
   return body;
+}
+
+function resetWorkspace() {
+  fileToUpload = null;
+  indexedCount = 0;
+  sessionDocuments = [];
+  documentCount.textContent = "0";
+  documentList.replaceChildren(emptyListTemplate.cloneNode(true));
+  documentScope.length = 1;
+  documentScope.value = "";
+  chatHistory.replaceChildren(welcomeTemplate.cloneNode(true));
+  questionInput.value = "";
+  fileInput.value = "";
+  selectedFile.hidden = true;
+  uploadButton.disabled = true;
+  uploadButton.textContent = "Index document ↗";
+  askButton.disabled = false;
+  askButton.textContent = "Ask ↗";
+  setUploadMessage("");
+}
+
+function signOut() {
+  if (activeUser) {
+    try {
+      sessionStorage.removeItem(`indexedDocuments:${activeUser.id}`);
+    } catch {
+      // Browsers can disable session storage.
+    }
+  }
+  try {
+    sessionStorage.removeItem("accessToken");
+  } catch {
+    // The in-memory token is still cleared below.
+  }
+  accessToken = null;
+  activeUser = null;
+  resetWorkspace();
+  workspace.hidden = true;
+  account.hidden = true;
+  authPanel.hidden = false;
+}
+
+function signIn(token, user) {
+  accessToken = token;
+  activeUser = user;
+  try {
+    sessionStorage.setItem("accessToken", token);
+  } catch {
+    // Login still works until this page is refreshed.
+  }
+  resetWorkspace();
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(`indexedDocuments:${user.id}`) || "[]");
+    if (Array.isArray(saved)) {
+      sessionDocuments = saved.filter((item) => item.document_id && item.source);
+      sessionDocuments.forEach(addIndexedDocument);
+    }
+  } catch {
+    // A blocked or invalid session store should not stop the interface.
+  }
+  accountName.textContent = user.username;
+  authPanel.hidden = true;
+  account.hidden = false;
+  workspace.hidden = false;
+  passwordInput.value = "";
+}
+
+async function authorizedFetch(url, options = {}) {
+  if (!accessToken) throw new Error("Please log in first.");
+  const requestToken = accessToken;
+  const headers = new Headers(options.headers);
+  headers.set("Authorization", `Bearer ${requestToken}`);
+  const response = await fetch(url, { ...options, headers });
+  if (response.status === 401 && accessToken === requestToken) signOut();
+  return response;
+}
+
+function showAuthMode(isSignup) {
+  signupMode = isSignup;
+  authTitle.textContent = isSignup ? "Create your account." : "Welcome back.";
+  authSubmit.textContent = isSignup ? "Create account" : "Log in";
+  authToggle.textContent = isSignup ? "Already have an account? Log in" : "New here? Create an account";
+  passwordInput.autocomplete = isSignup ? "new-password" : "current-password";
+  authMessage.textContent = "";
 }
 
 function addIndexedDocument(result) {
@@ -142,6 +243,8 @@ dropZone.addEventListener("drop", (event) => selectFile(event.dataTransfer.files
 
 uploadButton.addEventListener("click", async () => {
   if (!fileToUpload) return;
+  const requestUserId = activeUser?.id;
+  const requestToken = accessToken;
   uploadButton.disabled = true;
   uploadButton.textContent = "Indexing…";
   setUploadMessage("Extracting text and creating embeddings. This may take a moment.");
@@ -149,11 +252,12 @@ uploadButton.addEventListener("click", async () => {
   try {
     const form = new FormData();
     form.append("file", fileToUpload);
-    const result = await readResponse(await fetch("/api/v1/ingest", { method: "POST", body: form }));
+    const result = await readResponse(await authorizedFetch("/api/v1/ingest", { method: "POST", body: form }));
+    if (activeUser?.id !== requestUserId || accessToken !== requestToken) return;
     addIndexedDocument(result);
     sessionDocuments.push(result);
     try {
-      sessionStorage.setItem("indexedDocuments", JSON.stringify(sessionDocuments));
+      sessionStorage.setItem(`indexedDocuments:${activeUser.id}`, JSON.stringify(sessionDocuments));
     } catch {
       // Upload still succeeded if the browser blocks session storage.
     }
@@ -162,21 +266,57 @@ uploadButton.addEventListener("click", async () => {
     fileInput.value = "";
     selectedFile.hidden = true;
   } catch (error) {
-    setUploadMessage(error.message, true);
+    if (activeUser?.id === requestUserId && accessToken === requestToken) setUploadMessage(error.message, true);
   } finally {
-    uploadButton.textContent = "Index document ↗";
-    uploadButton.disabled = !fileToUpload;
+    if (activeUser?.id === requestUserId && accessToken === requestToken) {
+      uploadButton.textContent = "Index document ↗";
+      uploadButton.disabled = !fileToUpload;
+    }
+  }
+});
+
+authToggle.addEventListener("click", () => showAuthMode(!signupMode));
+logoutButton.addEventListener("click", () => {
+  const request = authorizedFetch("/api/v1/logout", { method: "POST" });
+  signOut();
+  request.catch(() => {});
+});
+
+authForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  authSubmit.disabled = true;
+  authMessage.textContent = "";
+  authMessage.classList.remove("error");
+  try {
+    const path = signupMode ? "/api/v1/signup" : "/api/v1/login";
+    const result = await readResponse(await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: usernameInput.value, password: passwordInput.value }),
+    }));
+    signIn(result.access_token, result.user);
+  } catch (error) {
+    authMessage.textContent = error.message;
+    authMessage.classList.add("error");
+  } finally {
+    authSubmit.disabled = false;
   }
 });
 
 try {
-  const saved = JSON.parse(sessionStorage.getItem("indexedDocuments") || "[]");
-  if (Array.isArray(saved)) {
-    sessionDocuments = saved.filter((item) => item.document_id && item.source);
-    sessionDocuments.forEach(addIndexedDocument);
+  const savedToken = sessionStorage.getItem("accessToken");
+  if (savedToken) {
+    fetch("/api/v1/me", { headers: { Authorization: `Bearer ${savedToken}` } })
+      .then(readResponse)
+      .then((user) => {
+        if (!activeUser && sessionStorage.getItem("accessToken") === savedToken) signIn(savedToken, user);
+      })
+      .catch(() => {
+        if (!activeUser && sessionStorage.getItem("accessToken") === savedToken) signOut();
+      });
   }
 } catch {
-  // A blocked or invalid session store should not stop the interface.
+  // A browser with storage disabled can still log in for this page visit.
 }
 
 questionInput.addEventListener("keydown", (event) => {
@@ -190,6 +330,8 @@ chatForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const question = questionInput.value.trim();
   if (!question || askButton.disabled) return;
+  const requestUserId = activeUser?.id;
+  const requestToken = accessToken;
 
   addMessage("user", question);
   questionInput.value = "";
@@ -198,7 +340,7 @@ chatForm.addEventListener("submit", async (event) => {
   const pending = addMessage("assistant", "Searching your documents…");
 
   try {
-    const response = await readResponse(await fetch("/api/v1/chat", {
+    const response = await readResponse(await authorizedFetch("/api/v1/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -208,17 +350,22 @@ chatForm.addEventListener("submit", async (event) => {
         document_id: documentScope.value || null,
       }),
     }));
+    if (activeUser?.id !== requestUserId || accessToken !== requestToken) return;
     pending.querySelector(".message-text").textContent = response.answer;
     if (response.status !== "ANSWERED") pending.classList.add("refusal");
     addSources(pending, response.sources);
   } catch (error) {
-    pending.classList.add("refusal");
-    pending.querySelector(".message-text").textContent = error.message;
+    if (activeUser?.id === requestUserId && accessToken === requestToken) {
+      pending.classList.add("refusal");
+      pending.querySelector(".message-text").textContent = error.message;
+    }
   } finally {
-    askButton.disabled = false;
-    askButton.textContent = "Ask ↗";
-    questionInput.focus();
-    chatHistory.scrollTop = chatHistory.scrollHeight;
+    if (activeUser?.id === requestUserId && accessToken === requestToken) {
+      askButton.disabled = false;
+      askButton.textContent = "Ask ↗";
+      questionInput.focus();
+      chatHistory.scrollTop = chatHistory.scrollHeight;
+    }
   }
 });
 

@@ -14,13 +14,34 @@
           <span class="brand-mark" aria-hidden="true">▤</span>
           <span>Document <strong>Q&A</strong></span>
         </a>
-        <div class="connection" id="connection-status" role="status">
-          <span class="connection-dot"></span>
-          <span>Checking backend…</span>
+        <div class="topbar-actions">
+          <div class="connection" id="connection-status" role="status">
+            <span class="connection-dot"></span>
+            <span>Checking backend…</span>
+          </div>
+          <div class="account" id="account" hidden>
+            <span id="account-name"></span>
+            <button id="logout-button" type="button">Log out</button>
+          </div>
         </div>
       </header>
 
-      <main class="workspace">
+      <section class="auth-panel card" id="auth-panel" aria-labelledby="auth-title">
+        <p class="eyebrow">DOCUMENT Q&A</p>
+        <h1 id="auth-title">Welcome back.</h1>
+        <p class="muted">Log in to access only your own documents and answers.</p>
+        <form id="auth-form">
+          <label for="username-input">Username</label>
+          <input id="username-input" name="username" type="text" minlength="3" maxlength="32" pattern="[A-Za-z0-9_]+" autocomplete="username" required />
+          <label for="password-input">Password</label>
+          <input id="password-input" name="password" type="password" minlength="8" maxlength="128" autocomplete="current-password" required />
+          <button class="primary-button full-width" id="auth-submit" type="submit">Log in</button>
+        </form>
+        <p class="inline-message" id="auth-message" role="status" aria-live="polite"></p>
+        <button class="auth-toggle" id="auth-toggle" type="button">New here? Create an account</button>
+      </section>
+
+      <main class="workspace" id="workspace" hidden>
         <section class="intro" aria-labelledby="page-title">
           <p class="eyebrow">YOUR DOCUMENT WORKSPACE</p>
           <h1 id="page-title">Find the answer.<br /><span>See the evidence.</span></h1>
@@ -80,7 +101,7 @@
             <div class="scope-row">
               <label for="document-scope">Search in</label>
               <select id="document-scope">
-                <option value="">All documents in database</option>
+                <option value="">All my documents</option>
               </select>
             </div>
             <form class="composer" id="chat-form">

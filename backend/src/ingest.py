@@ -42,7 +42,7 @@ def read_upload(filename: str, content: bytes) -> list[Document]:
     return pages
 
 
-def ingest_file(filename: str, content: bytes) -> tuple[str, int]:
+def ingest_file(filename: str, content: bytes, user_id: str) -> tuple[str, int]:
     """Split a file, embed its chunks, and add them to PostgreSQL."""
     pages = read_upload(filename, content)
     splitter = RecursiveCharacterTextSplitter(
@@ -53,6 +53,7 @@ def ingest_file(filename: str, content: bytes) -> tuple[str, int]:
     chunks = splitter.split_documents(pages)
     for chunk_index, chunk in enumerate(chunks):
         chunk.metadata["chunk_index"] = chunk_index
+        chunk.metadata["user_id"] = user_id
 
     document_id = pages[0].metadata["document_id"]
     chunk_ids = [str(uuid4()) for _ in chunks]

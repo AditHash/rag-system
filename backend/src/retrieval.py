@@ -28,10 +28,12 @@ def get_vector_store() -> PGVector:
 
 
 def search_documents(
-    question: str, top_k: int, document_id: str | None = None
+    question: str, top_k: int, user_id: str, document_id: str | None = None
 ) -> list[dict[str, object]]:
-    """Return the closest stored chunks and their source metadata."""
-    metadata_filter = {"document_id": document_id} if document_id else None
+    """Return only this user's closest stored chunks."""
+    metadata_filter = {"user_id": user_id}
+    if document_id:
+        metadata_filter["document_id"] = document_id
     matches = get_vector_store().similarity_search_with_score(
         question, k=top_k, filter=metadata_filter
     )

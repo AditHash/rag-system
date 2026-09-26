@@ -6,6 +6,8 @@ PostgreSQL/pgvector storage and search.
 
 It provides an ingestion route, a search route for inspecting retrieval, and a
 chat route that retrieves chunks and uses them to generate a cited answer.
+Accounts use JWT bearer tokens; uploaded chunks and retrieval are scoped to the
+authenticated user.
 A measured evaluation is not implemented yet.
 
 ## Requirements
@@ -14,14 +16,18 @@ A measured evaluation is not implemented yet.
 - PostgreSQL with the `vector` extension installed
 - AWS credentials permitted to invoke the configured Bedrock embedding,
   reranking, and chat models in `us-east-1`
-- A database user that can connect to the database and use the `vector` extension
+- A database user that can create tables and use the `vector` extension
 
 No AWS resources are provisioned by these instructions. Embedding requests are
 billable Bedrock calls.
 
 ## Configure and run
 
-From `backend/`, copy `.env.example` to `.env` and fill in the local database URL.
+From `backend/`, copy `.env.example` to `.env` and fill in the database URL and
+`JWT_SECRET`. Generate the secret locally with
+`python -c 'import secrets; print(secrets.token_urlsafe(48))'` and paste it into
+`.env`; keep that file private. The backend creates `app_users` and
+`revoked_tokens` tables on startup. A missing or short JWT secret stops startup.
 The app loads settings from that file when it starts.
 Use your normal AWS credential chain (for example, `AWS_PROFILE`) for Bedrock
 access; AWS credentials themselves are not loaded from this file by the app.
@@ -69,15 +75,47 @@ npm run dev
 Open `http://127.0.0.1:5173`. The development server forwards `/api` and
 `/health` requests to the local backend, so no CORS setting is needed. The
 frontend can upload PDF/TXT files, ask questions in normal or thinking mode,
-and show cited source passages. The indexed-file list only shows uploads from
-the current browser session; the backend database can hold older documents.
+and show cited source passages after signup or login. The indexed-file list only
+shows uploads from the current browser session; the backend database can hold
+older documents belonging to the same account.
 The latest upload is selected as the chat source automatically. The source
 selector can switch to another upload from this session or search all documents
 in the database. Session upload names and IDs are kept in browser session storage
 so a refresh does not require re-uploading; file contents are not stored there.
+The JWT is also held in browser session storage and is cleared on logout.
 `npm run build` creates static files in `frontend/dist/`. In deployment, serve
 those files and route `/api` and `/health` to FastAPI on the same origin.
 Uploading and asking questions invoke Bedrock models and may incur charges.
+
+## Accounts and access
+
+Create an account or log in through the frontend, or use these API routes:
+
+- `POST /api/v1/signup` with `{"username":"alice","password":"your-password"}`
+  creates a user and returns an access token.
+- `POST /api/v1/login` with the same fields returns an access token.
+- `GET /api/v1/me` returns the current user.
+- `POST /api/v1/logout` revokes the current token (HTTP 204). Log in again for a
+  new token.
+
+Usernames are case-insensitive and must be 3–32 letters, digits, or underscores.
+Passwords must be 8–128 characters and are stored as Argon2 hashes. The JWT
+expires after `JWT_EXPIRE_MINUTES` (12 hours by default). Send it as
+`Authorization: Bearer <token>` to `/me`, `/logout`, `/ingest`, `/search`, and
+`/chat`. For example, after copying the token into your shell:
+
+```bash
+export RAG_TOKEN='paste-token-here'
+curl -H "Authorization: Bearer $RAG_TOKEN" http://127.0.0.1:8000/api/v1/me
+```
+
+The API derives the user ID from the signed token and verifies that the user
+still exists. Ingestion tags chunks with that ID, and both search and chat filter
+pgvector results by it. A `document_id` narrows results only within that user's
+documents; it cannot select another user's file. Chat history is held in the
+browser only, so logging out or refreshing clears the visible conversation.
+Chunks indexed before this change have no user ID and are intentionally invisible
+to all accounts; re-upload those files while logged in.
 
 ## Ingest a document
 
@@ -88,6 +126,7 @@ default, embeds the chunks, and stores them in PostgreSQL.
 
 ```bash
 curl --fail --show-error \
+  -H "Authorization: Bearer $RAG_TOKEN" \
   -F 'file=@./example.pdf' \
   http://127.0.0.1:8000/api/v1/ingest
 ```
@@ -110,6 +149,7 @@ embeddings and PostgreSQL writes finish.
 
 ```bash
 curl --fail --show-error \
+  -H "Authorization: Bearer $RAG_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"question":"What does the document say about retention?","top_k":5}' \
   http://127.0.0.1:8000/api/v1/search
@@ -129,10 +169,11 @@ amount of text in the answer prompt. Qwen3 32B answers by default; set
 `thinking_mode` to `true` to select GPT-OSS 20B. All Bedrock models use the
 same `AWS_REGION` setting, which defaults to `us-east-1`.
 An optional `document_id` scopes search and chat to one uploaded document;
-without it, both endpoints search the whole collection.
+without it, both endpoints search all documents owned by the current user.
 
 ```bash
 curl --fail --show-error \
+  -H "Authorization: Bearer $RAG_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"question":"How long are records kept?","top_k":5,"thinking_mode":false}' \
   http://127.0.0.1:8000/api/v1/chat
@@ -193,7 +234,10 @@ its cited text or use a tested relevance threshold.
   new document ID; there is no delete endpoint yet.
 - PDF text extraction does not OCR scanned pages. A file with no extracted
   text is rejected.
-- The demo API has no authentication. Keep it on a trusted local network.
+- JWTs are stored in browser session storage for this small demo. Use HTTPS
+  before exposing the app publicly, since a stolen token grants access until
+  expiry or revocation. There is no signup rate limit, password reset, or email
+  verification yet.
 - There is no measured evaluation set or cloud deployment yet. Reranking
   improves ordering, but does not prove that a chunk answers the question.
   The prompt and citation-ID check are basic safeguards; there is no tested

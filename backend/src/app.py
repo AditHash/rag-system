@@ -24,7 +24,7 @@ from src.auth import (
     revoke_token,
 )
 from src.documents import create_documents_table, delete_document, list_documents
-from src.generation import generate_answer, verify_answer
+from src.generation import generate_answer
 from src.ingest import ingest_file
 from src.retrieval import rerank_documents, search_documents
 
@@ -265,21 +265,6 @@ def chat(
             ),
             sources=[],
         )
-
-    try:
-        answer_is_supported = verify_answer(
-            request.question, answer, chunks, thinking_mode=request.thinking_mode
-        )
-    except Exception as error:
-        logger.exception("Answer evidence verification failed")
-        raise HTTPException(
-            status_code=503,
-            detail="Answer verification failed. Check AWS credentials and Bedrock access.",
-        ) from error
-
-    if not answer_is_supported:
-        logger.info("Chat answer failed the evidence support check")
-        return ChatResponse(status="INSUFFICIENT_CONTEXT", answer=REFUSAL, sources=[])
 
     source_ids = list(dict.fromkeys(citations))
     sources = [{"source_id": source_id, **chunks[source_id - 1]} for source_id in source_ids]

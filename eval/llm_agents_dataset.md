@@ -56,12 +56,15 @@ missed:
 - **Q11, median time:** the draft had no valid citation, so the API returned
   `UNVERIFIED_ANSWER` rather than the strict insufficient-context response.
 
-The low-score gate, document-only prompt, citation-ID check, and model-based
-check over cited passages are safeguards, not a guarantee. The verifier uses
-the same selected chat model, and the misses above show it can accept incomplete
-answers. The threshold is a simple demo setting, not a broadly calibrated
-relevance boundary. RAGAS was not run and exact Bedrock costs were not captured.
-Embedding, reranking, answer, and verification calls may incur charges.
+This live run included a model-based check over cited passages. That verifier
+used the same selected chat model as generation, added another billable model
+call and latency, and did not prevent all incomplete answers. It has since been
+removed; the current implementation relies on the retrieval score gate, a
+stronger answer prompt, and citation-ID validation. Those safeguards are not a
+semantic proof of grounding, so the evaluation needs to be rerun to measure the
+current behavior. The threshold is a demo setting, not a calibrated relevance
+boundary. RAGAS was not run and exact Bedrock costs were not captured.
+Embedding, reranking, and answer calls may incur charges.
 
 For the walkthrough, Q05 or Q08 is a supported answer; Q10 is a strict refusal;
 Q01 demonstrates the relevance gate; Q02 or Q07 demonstrates the remaining

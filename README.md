@@ -273,12 +273,24 @@ Example response:
 ```
 
 The API refuses before generation when the top Cohere rerank score is below
-`MIN_RERANK_SCORE` (default `0.15`), checks that answer references map to
-retrieved chunks, and asks the selected chat model to verify the answer against
-only the cited passages. A failed check returns a refusal or an unverified-answer
-response with no source text. These are safeguards, not proof: the verifier is
-another call to the same model, and this small evaluation still contains
-incomplete answers that passed its check.
+`MIN_RERANK_SCORE` (default `0.15`) and checks that answer references map to
+retrieved chunks. The answer prompt asks the model to respond only when the
+passages directly support every requested detail, and to refuse when details
+are missing or unclear. Answers without valid citations are withheld as
+`UNVERIFIED_ANSWER`. There is no second model-based answer-verification call:
+that call added latency and cost, and used the same model as the generator.
+Prompt instructions and citation-ID checks do not prove that the claims are
+semantically supported, so the system can still hallucinate or give incomplete
+answers.
+
+LangChain's existing `ChatBedrockConverse` supports attaching a configured
+Bedrock Guardrail through `guardrail_config`, so no extra Python dependency is
+needed. It still requires creating a Guardrail in AWS and incurs filter usage
+charges. More importantly, AWS currently documents its contextual-grounding
+check as unsupported for conversational QA/chatbot use cases, so this demo
+does not enable it. See the [LangChain parameter](https://reference.langchain.com/python/langchain-aws/chat_models/bedrock_converse/ChatBedrockConverse/guardrail_config),
+[AWS contextual grounding documentation](https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails-contextual-grounding-check.html),
+and [Bedrock pricing](https://aws.amazon.com/bedrock/pricing/).
 
 ## Choices and limits
 
@@ -320,10 +332,11 @@ incomplete answers that passed its check.
   verification yet.
 - The latest paper-specific evaluation scored 8/13 (5/9 answerable; 3/4
   strict refusals, with the remaining unanswerable question receiving an
-  unverified response without sources). It still exposes incomplete answers;
-  see the [evaluation report](eval/llm_agents_dataset.md). Reranking, a score
-  floor, and model-based cited-passage checking reduce risk but do not prove
-  every answer is grounded.
+  unverified response without sources). That run used the now-removed extra
+  model verification call, so its results are historical and should be rerun
+  before describing current behavior. See the [evaluation report](eval/llm_agents_dataset.md).
+  Reranking, a score floor, prompt instructions, and citation-ID checks reduce
+  risk but do not prove every answer is grounded.
 
 ## AWS demo deployment
 

@@ -277,11 +277,15 @@ The API refuses before generation when the top Cohere rerank score is below
 retrieved chunks. The answer prompt asks the model to respond only when the
 passages directly support every requested detail, and to refuse when details
 are missing or unclear. Answers without valid citations are withheld as
-`UNVERIFIED_ANSWER`. There is no second model-based answer-verification call:
-that call added latency and cost, and used the same model as the generator.
-Prompt instructions and citation-ID checks do not prove that the claims are
-semantically supported, so the system can still hallucinate or give incomplete
-answers.
+`UNVERIFIED_ANSWER`. Before generation, the API asks the configured regular
+Bedrock chat model whether the retrieved passages contain enough explicit
+evidence to answer the question. If the model does not return an exact `YES`,
+the API refuses without generating an answer. This LLM-based retrieval
+sufficiency check is not proof that a generated answer is correct: the judge can
+make mistakes. It also adds one Bedrock inference call, increasing latency and
+cost for questions that pass the check. Citation-ID validation still checks
+that returned source references point to chunks retrieved for this request.
+None of these controls eliminates hallucinations.
 
 LangChain's existing `ChatBedrockConverse` supports attaching a configured
 Bedrock Guardrail through `guardrail_config`, so no extra Python dependency is
@@ -335,8 +339,10 @@ and [Bedrock pricing](https://aws.amazon.com/bedrock/pricing/).
   unverified response without sources). That run used the now-removed extra
   model verification call, so its results are historical and should be rerun
   before describing current behavior. See the [evaluation report](eval/llm_agents_dataset.md).
-  Reranking, a score floor, prompt instructions, and citation-ID checks reduce
-  risk but do not prove every answer is grounded.
+  Reranking, a score floor, prompt instructions, citation-ID validation, and
+  the retrieval sufficiency check reduce some risk but do not prove every
+  answer is grounded. The sufficiency check adds an LLM call and must be
+  evaluated before relying on its refusal behavior.
 
 ## AWS demo deployment
 

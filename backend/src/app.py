@@ -24,7 +24,7 @@ from src.auth import (
     revoke_token,
 )
 from src.documents import create_documents_table, delete_document, list_documents
-from src.generation import generate_answer
+from src.generation import check_retrieval_grounding, generate_answer
 from src.ingest import ingest_file
 from src.retrieval import rerank_documents, search_documents
 
@@ -240,6 +240,9 @@ def chat(
             return ChatResponse(status="INSUFFICIENT_CONTEXT", answer=REFUSAL, sources=[])
         if float(chunks[0].get("rerank_score", 0)) < config.MIN_RERANK_SCORE:
             logger.info("Top reranked passage did not meet the evidence threshold")
+            return ChatResponse(status="INSUFFICIENT_CONTEXT", answer=REFUSAL, sources=[])
+        if not check_retrieval_grounding(request.question, chunks):
+            logger.info("Retrieved passages were not judged sufficient for the question")
             return ChatResponse(status="INSUFFICIENT_CONTEXT", answer=REFUSAL, sources=[])
 
         answer = generate_answer(

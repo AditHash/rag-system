@@ -59,10 +59,11 @@ missed:
 This live run included a model-based check over cited passages. That verifier
 used the same selected chat model as generation, added another billable model
 call and latency, and did not prevent all incomplete answers. It has since been
-removed; the current implementation relies on the retrieval score gate, a
-stronger answer prompt, and citation-ID validation. Those safeguards are not a
-semantic proof of grounding, so the evaluation needs to be rerun to measure the
-current behavior. The threshold is a demo setting, not a calibrated relevance
+removed. The current implementation adds an LLM-based retrieval sufficiency
+check before generation; that check was not part of this run and has not been
+evaluated. It adds a Bedrock call for questions that pass the check and can
+still make mistakes, so rerun the set before making claims about current
+behavior. The reranker threshold is a demo setting, not a calibrated relevance
 boundary. RAGAS was not run and exact Bedrock costs were not captured.
 Embedding, reranking, and answer calls may incur charges.
 

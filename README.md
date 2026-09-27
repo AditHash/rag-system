@@ -53,9 +53,9 @@ The PostgreSQL server must already have pgvector installed. Model IDs, region,
 chunk size, overlap, collection name, S3 bucket, and database URL are configurable
 in `backend/src/config.py` through environment variables. `AWS_PROFILE` is read
 by the standard AWS credential chain and does not need to be copied into code.
-The configured AWS identity needs `s3:PutObject` for the bucket's `users/*` keys
-when `S3_BUCKET` is set. The bucket and Bedrock models must use the configured
-`AWS_REGION` (currently `us-east-1`).
+The configured AWS identity needs `s3:PutObject` and `s3:DeleteObject` for the
+bucket's `users/*` keys when `S3_BUCKET` is set. The bucket and Bedrock models
+must use the configured `AWS_REGION` (currently `us-east-1`).
 
 Check the process health and interactive API documentation:
 
@@ -80,13 +80,11 @@ npm run dev
 Open `http://127.0.0.1:5173`. The development server forwards `/api` and
 `/health` requests to the local backend, so no CORS setting is needed. The
 frontend can upload PDF/TXT files, ask questions in normal or thinking mode,
-and show cited source passages after signup or login. The indexed-file list only
-shows uploads from the current browser session; the backend database can hold
-older documents belonging to the same account.
-The latest upload is selected as the chat source automatically. The source
-selector can switch to another upload from this session or search all documents
-in the database. Session upload names and IDs are kept in browser session storage
-so a refresh does not require re-uploading; file contents are not stored there.
+and show cited source passages after signup or login. The indexed-file list
+loads the account's document records from PostgreSQL, including files uploaded
+in earlier sessions. The latest upload is selected as the chat source
+automatically. The source selector can switch to another upload or search all
+documents in the database. The list also lets the owner delete a document.
 The JWT is also held in browser session storage and is cleared on logout.
 `npm run build` creates static files in `frontend/dist/`. In deployment, serve
 those files and route `/api` and `/health` to FastAPI on the same origin.
@@ -130,8 +128,10 @@ splits text into 1,000-character chunks with 150 characters of overlap by
 default, embeds the chunks, and stores them in PostgreSQL. If `S3_BUCKET` is set,
 the original file is first stored at
 `users/<user_id>/documents/<document_id>/original.pdf` (or `.txt`). The key uses
-server-generated IDs, not an untrusted filename; it is saved in chunk metadata.
-The object is private and explicitly uses SSE-S3 encryption.
+server-generated IDs, not an untrusted filename.
+The object is private and explicitly uses SSE-S3 encryption. A separate
+`uploaded_documents` row stores the original filename, owner, S3 bucket and key,
+chunk count, status, and upload time once per document.
 
 ```bash
 curl --fail --show-error \
@@ -153,8 +153,14 @@ Example response:
 
 Ingestion is synchronous in this demo. It returns only after the optional S3
 write, Bedrock embeddings, and PostgreSQL writes finish. If embedding or database
-storage fails after S3 succeeds, the original remains in S3 for recovery; the
-current demo has no cleanup or retry job.
+storage fails, the backend tries to remove the partial chunks and S3 object.
+Cleanup is best effort because PostgreSQL and S3 do not share a transaction.
+
+`GET /api/v1/documents` lists the signed-in user's records, including their S3
+locations. `DELETE /api/v1/documents/{document_id}` removes an owned document,
+its vector chunks, and its original S3 object. Existing LangChain chunks are
+backfilled into the document list when the backend starts; their S3 bucket is
+assumed to match the current `S3_BUCKET` setting.
 
 ## Search stored documents
 
@@ -249,7 +255,7 @@ its cited text or use a tested relevance threshold.
   reranker integration, so this one call uses Boto3. `/search` still shows raw
   pgvector results to make the first retrieval stage easy to inspect.
 - Raw files are saved to S3 only when `S3_BUCKET` is configured. A new upload gets
-  a new document ID; there is no delete endpoint yet. An S3 key prefix separates
+  a new document ID. An S3 key prefix separates
   objects by user, while bucket access is controlled by IAM rather than the key
   name itself.
 - PDF text extraction does not OCR scanned pages. A file with no extracted

@@ -31,7 +31,6 @@ const emptyListTemplate = document.querySelector(".empty-list").cloneNode(true);
 
 let fileToUpload = null;
 let indexedCount = 0;
-let sessionDocuments = [];
 let accessToken = null;
 let activeUser = null;
 let signupMode = false;
@@ -75,7 +74,6 @@ async function readResponse(response) {
 function resetWorkspace() {
   fileToUpload = null;
   indexedCount = 0;
-  sessionDocuments = [];
   documentCount.textContent = "0";
   documentList.replaceChildren(emptyListTemplate.cloneNode(true));
   documentScope.length = 1;
@@ -92,13 +90,6 @@ function resetWorkspace() {
 }
 
 function signOut() {
-  if (activeUser) {
-    try {
-      sessionStorage.removeItem(`indexedDocuments:${activeUser.id}`);
-    } catch {
-      // Browsers can disable session storage.
-    }
-  }
   try {
     sessionStorage.removeItem("accessToken");
   } catch {
@@ -121,15 +112,7 @@ function signIn(token, user) {
     // Login still works until this page is refreshed.
   }
   resetWorkspace();
-  try {
-    const saved = JSON.parse(sessionStorage.getItem(`indexedDocuments:${user.id}`) || "[]");
-    if (Array.isArray(saved)) {
-      sessionDocuments = saved.filter((item) => item.document_id && item.source);
-      sessionDocuments.forEach(addIndexedDocument);
-    }
-  } catch {
-    // A blocked or invalid session store should not stop the interface.
-  }
+  loadDocuments(token, user.id);
   accountName.textContent = user.username;
   authPanel.hidden = true;
   account.hidden = false;
@@ -147,6 +130,18 @@ async function authorizedFetch(url, options = {}) {
   return response;
 }
 
+async function loadDocuments(token, userId) {
+  try {
+    const saved = await readResponse(await authorizedFetch("/api/v1/documents"));
+    if (accessToken !== token || activeUser?.id !== userId) return;
+    saved.reverse().forEach(addIndexedDocument);
+  } catch (error) {
+    if (accessToken === token && activeUser?.id === userId) {
+      setUploadMessage(`Could not load your documents: ${error.message}`, true);
+    }
+  }
+}
+
 function showAuthMode(isSignup) {
   signupMode = isSignup;
   authTitle.textContent = isSignup ? "Create your account." : "Welcome back.";
@@ -157,12 +152,14 @@ function showAuthMode(isSignup) {
 }
 
 function addIndexedDocument(result) {
+  if (documentList.querySelector(`[data-document-id="${result.document_id}"]`)) return;
   if (indexedCount === 0) documentList.replaceChildren();
   indexedCount += 1;
   documentCount.textContent = String(indexedCount);
 
   const item = document.createElement("div");
   item.className = "document-item";
+  item.dataset.documentId = result.document_id;
   const icon = document.createElement("span");
   icon.className = "document-icon";
   icon.textContent = result.source.toLowerCase().endsWith(".pdf") ? "PDF" : "TXT";
@@ -173,7 +170,28 @@ function addIndexedDocument(result) {
   const count = document.createElement("small");
   count.textContent = `${result.chunk_count} ${result.chunk_count === 1 ? "chunk" : "chunks"} indexed`;
   details.append(name, count);
-  item.append(icon, details);
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "document-remove";
+  remove.textContent = "Delete";
+  remove.setAttribute("aria-label", `Delete ${result.source}`);
+  remove.addEventListener("click", async () => {
+    if (!window.confirm(`Delete ${result.source} and its indexed content?`)) return;
+    remove.disabled = true;
+    try {
+      await readResponse(await authorizedFetch(`/api/v1/documents/${result.document_id}`, { method: "DELETE" }));
+      item.remove();
+      documentScope.querySelector(`option[value="${result.document_id}"]`)?.remove();
+      indexedCount -= 1;
+      documentCount.textContent = String(indexedCount);
+      if (indexedCount === 0) documentList.append(emptyListTemplate.cloneNode(true));
+      setUploadMessage(`${result.source} was deleted.`);
+    } catch (error) {
+      setUploadMessage(error.message, true);
+      remove.disabled = false;
+    }
+  });
+  item.append(icon, details, remove);
   documentList.prepend(item);
 
   const option = document.createElement("option");
@@ -255,12 +273,6 @@ uploadButton.addEventListener("click", async () => {
     const result = await readResponse(await authorizedFetch("/api/v1/ingest", { method: "POST", body: form }));
     if (activeUser?.id !== requestUserId || accessToken !== requestToken) return;
     addIndexedDocument(result);
-    sessionDocuments.push(result);
-    try {
-      sessionStorage.setItem(`indexedDocuments:${activeUser.id}`, JSON.stringify(sessionDocuments));
-    } catch {
-      // Upload still succeeded if the browser blocks session storage.
-    }
     setUploadMessage(`${result.source} is ready for questions.`);
     fileToUpload = null;
     fileInput.value = "";

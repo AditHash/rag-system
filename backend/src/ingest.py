@@ -1,6 +1,7 @@
 """Read PDF/TXT uploads and store LangChain chunks in PostgreSQL."""
 
 from io import BytesIO
+import logging
 from uuid import uuid4
 
 import boto3
@@ -10,7 +11,10 @@ from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 
 from src import config
+from src.documents import save_document
 from src.retrieval import get_vector_store
+
+logger = logging.getLogger(__name__)
 
 
 def read_upload(filename: str, content: bytes) -> list[Document]:
@@ -47,6 +51,7 @@ def ingest_file(filename: str, content: bytes, user_id: str) -> tuple[str, int]:
     """Save the original if configured, then embed its chunks in PostgreSQL."""
     pages = read_upload(filename, content)
     document_id = pages[0].metadata["document_id"]
+    s3_key = None
     if config.S3_BUCKET:
         extension = filename.rsplit(".", 1)[-1].lower()
         s3_key = f"users/{user_id}/documents/{document_id}/original.{extension}"
@@ -57,8 +62,6 @@ def ingest_file(filename: str, content: bytes, user_id: str) -> tuple[str, int]:
             ContentType="application/pdf" if extension == "pdf" else "text/plain",
             ServerSideEncryption="AES256",
         )
-        for page in pages:
-            page.metadata["s3_key"] = s3_key
 
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=config.CHUNK_SIZE,
@@ -71,5 +74,20 @@ def ingest_file(filename: str, content: bytes, user_id: str) -> tuple[str, int]:
         chunk.metadata["user_id"] = user_id
 
     chunk_ids = [str(uuid4()) for _ in chunks]
-    get_vector_store().add_documents(chunks, ids=chunk_ids)
+    try:
+        get_vector_store().add_documents(chunks, ids=chunk_ids)
+        save_document(document_id, user_id, filename, s3_key, len(chunks))
+    except Exception:
+        try:
+            get_vector_store().delete(ids=chunk_ids)
+        except Exception:
+            logger.exception("Could not remove chunks after failed ingestion")
+        if s3_key:
+            try:
+                boto3.client("s3", region_name=config.AWS_REGION).delete_object(
+                    Bucket=config.S3_BUCKET, Key=s3_key
+                )
+            except Exception:
+                logger.exception("Could not remove S3 object after failed ingestion")
+        raise
     return document_id, len(chunks)

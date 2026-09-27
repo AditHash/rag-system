@@ -3,6 +3,7 @@
 import logging
 import re
 from contextlib import asynccontextmanager
+from datetime import datetime
 from typing import Annotated, AsyncIterator, Literal
 from uuid import UUID
 
@@ -22,11 +23,14 @@ from src.auth import (
     revoke_token,
 )
 from src.generation import generate_answer
+from src.documents import create_documents_table, delete_document, list_documents
 from src.ingest import ingest_file
 from src.retrieval import rerank_documents, search_documents
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     await run_in_threadpool(create_users_table)
+    await run_in_threadpool(create_documents_table)
     yield
 
 
@@ -67,6 +71,16 @@ class IngestResponse(BaseModel):
     source: str
     status: Literal["indexed"]
     chunk_count: int = Field(ge=0)
+
+
+class DocumentResponse(BaseModel):
+    document_id: str
+    source: str
+    s3_bucket: str | None
+    s3_key: str | None
+    chunk_count: int = Field(ge=0)
+    status: Literal["INDEXED"]
+    created_at: datetime
 
 
 class SearchResultResponse(BaseModel):
@@ -159,6 +173,22 @@ async def ingest(
         status="indexed",
         chunk_count=chunk_count,
     )
+
+
+@app.get("/api/v1/documents", response_model=list[DocumentResponse])
+def documents(user: Annotated[dict[str, str], Depends(current_user)]) -> list[dict]:
+    """List this user's uploaded documents and their S3 locations."""
+    return list_documents(user["id"])
+
+
+@app.delete("/api/v1/documents/{document_id}", status_code=204)
+def remove_document(
+    document_id: UUID,
+    user: Annotated[dict[str, str], Depends(current_user)],
+) -> None:
+    """Delete one owned document, its chunks, and its original S3 object."""
+    if not delete_document(str(document_id), user["id"]):
+        raise HTTPException(status_code=404, detail="Document not found.")
 
 
 @app.post("/api/v1/search", response_model=SearchResponse)

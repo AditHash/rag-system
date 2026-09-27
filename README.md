@@ -323,9 +323,9 @@ The flow and architecture overview below is the Draw.io diagram. The
 [deployment guide](deployment/README.md) includes a separate detailed AWS
 infrastructure diagram with the current VPC, subnet, service, and security layout.
 
-[Open the editable Draw.io SVG](deployment/rag-flow-architecture.drawio.svg).
+[Open the editable Draw.io SVG](rag.drawio.svg).
 
-![RAG flow and architecture diagram](deployment/rag-flow-architecture.drawio.svg)
+![RAG flow and architecture diagram](rag.drawio.svg)
 
 ## Manual checks
 

@@ -8,7 +8,8 @@ It provides an ingestion route, a search route for inspecting retrieval, and a
 chat route that retrieves chunks and uses them to generate a cited answer.
 Accounts use JWT bearer tokens; uploaded chunks and retrieval are scoped to the
 authenticated user.
-A measured evaluation is not implemented yet.
+The small [evaluation set and measured results](eval/summary.md) cover answerable
+questions, refusals, and user isolation.
 
 ## Requirements
 
@@ -257,7 +258,8 @@ its cited text or use a tested relevance threshold.
   before exposing the app publicly, since a stolen token grants access until
   expiry or revocation. There is no signup rate limit, password reset, or email
   verification yet.
-- There is no measured evaluation set or cloud deployment yet. Reranking
+- The current evaluation scored 11/13; two absent-fact questions exposed
+  refusal-classification errors. There is no cloud deployment yet. Reranking
   improves ordering, but does not prove that a chunk answers the question.
   The prompt and citation-ID check are basic safeguards; there is no tested
   relevance threshold or claim-by-claim evidence verification yet.

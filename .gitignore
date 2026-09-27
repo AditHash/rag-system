@@ -1,4 +1,5 @@
 /project-information/
+/sample-pdfs/
 
 # Local secrets and credentials
 .env

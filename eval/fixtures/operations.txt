@@ -1,0 +1,7 @@
+Operations policy
+
+Incident reports must be submitted to the security team within 24 hours of discovery.
+Application logs are retained for 45 days and then deleted.
+Backups run every day at 02:00 UTC. The primary deployment region is us-east-1.
+The recovery time target after an outage is four hours.
+Recovery drills happen on the first Monday of each quarter.

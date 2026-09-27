@@ -2,9 +2,10 @@
 
 import logging
 import re
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Annotated, AsyncIterator, Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
@@ -22,10 +23,11 @@ from src.auth import (
     current_user,
     revoke_token,
 )
-from src.generation import generate_answer
 from src.documents import create_documents_table, delete_document, list_documents
+from src.generation import generate_answer, verify_answer
 from src.ingest import ingest_file
 from src.retrieval import rerank_documents, search_documents
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -235,9 +237,10 @@ def chat(
             ),
         )
         if not chunks:
-            return ChatResponse(
-                status="INSUFFICIENT_CONTEXT", answer=REFUSAL, sources=[]
-            )
+            return ChatResponse(status="INSUFFICIENT_CONTEXT", answer=REFUSAL, sources=[])
+        if float(chunks[0].get("rerank_score", 0)) < config.MIN_RERANK_SCORE:
+            logger.info("Top reranked passage did not meet the evidence threshold")
+            return ChatResponse(status="INSUFFICIENT_CONTEXT", answer=REFUSAL, sources=[])
 
         answer = generate_answer(
             request.question, chunks, thinking_mode=request.thinking_mode
@@ -263,9 +266,21 @@ def chat(
             sources=[],
         )
 
+    try:
+        answer_is_supported = verify_answer(
+            request.question, answer, chunks, thinking_mode=request.thinking_mode
+        )
+    except Exception as error:
+        logger.exception("Answer evidence verification failed")
+        raise HTTPException(
+            status_code=503,
+            detail="Answer verification failed. Check AWS credentials and Bedrock access.",
+        ) from error
+
+    if not answer_is_supported:
+        logger.info("Chat answer failed the evidence support check")
+        return ChatResponse(status="INSUFFICIENT_CONTEXT", answer=REFUSAL, sources=[])
+
     source_ids = list(dict.fromkeys(citations))
-    sources = [
-        {"source_id": source_id, **chunks[source_id - 1]}
-        for source_id in source_ids
-    ]
+    sources = [{"source_id": source_id, **chunks[source_id - 1]} for source_id in source_ids]
     return ChatResponse(status="ANSWERED", answer=answer, sources=sources)

@@ -20,6 +20,9 @@ def main() -> None:
         "AWS_REGION": os.environ.get("AWS_REGION", "us-east-1"),
         "IMAGE_URI": os.environ["IMAGE_URI"],
         "RUNTIME_SECRET_ARN": os.environ["RUNTIME_SECRET_ARN"],
+        "CHUNK_SIZE": os.environ.get("CHUNK_SIZE", "1000"),
+        "CHUNK_OVERLAP": os.environ.get("CHUNK_OVERLAP", "200"),
+        "MIN_RERANK_SCORE": os.environ.get("MIN_RERANK_SCORE", "0.15"),
     }
 
     for relative_path in TEMPLATES:

@@ -38,6 +38,18 @@
           "value": "${AWS_REGION}"
         },
         {
+          "name": "CHUNK_SIZE",
+          "value": "${CHUNK_SIZE}"
+        },
+        {
+          "name": "CHUNK_OVERLAP",
+          "value": "${CHUNK_OVERLAP}"
+        },
+        {
+          "name": "MIN_RERANK_SCORE",
+          "value": "${MIN_RERANK_SCORE}"
+        },
+        {
           "name": "BEDROCK_EMBEDDING_MODEL_ID",
           "value": "amazon.titan-embed-text-v2:0"
         },

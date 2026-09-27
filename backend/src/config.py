@@ -20,7 +20,8 @@ THINKING_MODEL_ID = os.getenv(
     "BEDROCK_THINKING_MODEL_ID", "openai.gpt-oss-20b-1:0"
 )
 RERANK_MODEL_ID = os.getenv("BEDROCK_RERANK_MODEL_ID", "cohere.rerank-v3-5:0")
+MIN_RERANK_SCORE = float(os.getenv("MIN_RERANK_SCORE", "0.15"))
 COLLECTION_NAME = os.getenv("VECTOR_COLLECTION", "documents")
 CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "1000"))
-CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "150"))
+CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "200"))
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024

@@ -22,9 +22,9 @@ baseline is documented separately in [eval/summary.md](eval/summary.md).
   limits, and AWS deployment.
 - **Evaluation:** the 13-question paper-specific set and measured results are
   in [`questions_llm_agents.jsonl`](eval/questions_llm_agents.jsonl) and
-  [`llm_agents_dataset.md`](eval/llm_agents_dataset.md). The live run scored
-  9/13 overall; all four questions absent from the paper were correctly
-  refused.
+  [`llm_agents_dataset.md`](eval/llm_agents_dataset.md). The latest live run
+  scored 8/13 at the selected 1,000 / 200 chunk settings; see the report for
+  misses and the comparison with 1,000 / 150.
 - **Architecture:** the flow and architecture diagram is
   [`rag.drawio.svg`](rag.drawio.svg); [`deployment/`](deployment/README.md)
   contains the deployment guide and detailed AWS infrastructure diagram.
@@ -171,7 +171,7 @@ to all accounts; re-upload those files while logged in.
 
 PDF and UTF-8 TXT files up to 10 MiB are accepted. The endpoint extracts text,
 keeps the source filename and 1-based page in LangChain document metadata,
-splits text into 1,000-character chunks with 150 characters of overlap by
+splits text into 1,000-character chunks with 200 characters of overlap by
 default, embeds the chunks, and stores them in PostgreSQL. If `S3_BUCKET` is set,
 the original file is first stored at
 `users/<user_id>/documents/<document_id>/original.pdf` (or `.txt`). The key uses
@@ -272,25 +272,32 @@ Example response:
 }
 ```
 
-This is a first grounding layer, not a guarantee against unsupported claims:
-the prompt requests document-only answers, and the API checks that references
-map to retrieved chunks. It does not yet verify that each claim is supported by
-its cited text or use a tested relevance threshold.
+The API refuses before generation when the top Cohere rerank score is below
+`MIN_RERANK_SCORE` (default `0.15`), checks that answer references map to
+retrieved chunks, and asks the selected chat model to verify the answer against
+only the cited passages. A failed check returns a refusal or an unverified-answer
+response with no source text. These are safeguards, not proof: the verifier is
+another call to the same model, and this small evaluation still contains
+incomplete answers that passed its check.
 
 ## Choices and limits
 
 - `RecursiveCharacterTextSplitter` fits the mixed PDF and plain-text inputs:
   it tries paragraph, line, and word boundaries before cutting at the character
   limit, and `split_documents` keeps each page's source metadata. The default
-  1,000-character size and 150-character overlap are simple demo settings, not
-  measured optimal values. A heading-based splitter is less useful when PDF
-  extraction loses heading structure; a token splitter would control prompt
-  length more precisely, but does not by itself preserve natural boundaries.
+  1,000-character size and 200-character overlap are simple demo settings, not
+  measured optimal values. On the current 13-question set, 1,000 / 150 and
+  1,000 / 200 each scored 8/13; 1,000 / 200 produced 143 chunks versus 140
+  and changed Q11 from an `ANSWERED` response citing page 10 to
+  `UNVERIFIED_ANSWER` with no sources. The score was unchanged, so this small
+  run is directional only. A heading-based
+  splitter is less useful when PDF extraction loses heading structure; a token
+  splitter would control prompt length more precisely, but does not by itself
+  preserve natural boundaries.
   Smaller chunks can pinpoint evidence but lose context; larger chunks create
   fewer embeddings yet may dilute retrieval and lengthen answer prompts. For
   large files, the current settings can create many chunks and slow synchronous
-  ingestion. We should compare sizes (for example 1,000/150 versus 1,500/200)
-  on the evaluation questions before changing the splitter or its settings.
+  ingestion.
 - Amazon Titan Text Embeddings V2 is the default embedding model. The same
   configured embedding object/model is used for document and query vectors.
 - Qwen3 32B (`BEDROCK_CHAT_MODEL_ID`) is used for normal answers; GPT-OSS 20B
@@ -311,13 +318,12 @@ its cited text or use a tested relevance threshold.
   before exposing the app publicly, since a stolen token grants access until
   expiry or revocation. There is no signup rate limit, password reset, or email
   verification yet.
-- The paper-specific evaluation scored 9/13 overall (5/9 answerable; 4/4
-  absent-answer questions refused). It exposed a grounding failure where the
-  answer cited the paper's references, plus incomplete answers; see the
-  [evaluation report](eval/llm_agents_dataset.md). Reranking improves ordering,
-  but does not prove that a chunk answers the question.
-  The prompt and citation-ID check are basic safeguards; there is no tested
-  relevance threshold or claim-by-claim evidence verification yet.
+- The latest paper-specific evaluation scored 8/13 (5/9 answerable; 3/4
+  strict refusals, with the remaining unanswerable question receiving an
+  unverified response without sources). It still exposes incomplete answers;
+  see the [evaluation report](eval/llm_agents_dataset.md). Reranking, a score
+  floor, and model-based cited-passage checking reduce risk but do not prove
+  every answer is grounded.
 
 ## AWS demo deployment
 

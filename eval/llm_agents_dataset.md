@@ -10,61 +10,60 @@ service, and refusal behavior. Expected page numbers are physical PDF pages.
 The paper-grounded answer for Q04 is that Muse Spark, running in the Muse Code
 harness, was blocked from deleting its traces on every attempt.
 
-## Live run
+## Live evaluation and chunk comparison
 
-On 2026-09-27, the set was sent to the deployed API at
-`https://rag-demo.cwmgenai.com`. The paper was uploaded into a temporary test
-account, indexed as 140 chunks, and every chat request was scoped to that
-document with `top_k=5`. The live pipeline performed pgvector retrieval,
-reranking, and answer generation. After the run, the uploaded document was
-deleted and the access token revoked. The temporary account record remains
-because there is no account-deletion endpoint.
+On 2026-09-27, the unchanged 13-question set was run against
+`https://rag-demo.cwmgenai.com` using the same image, models, reranking, score
+floor (`0.15`), and grounding check. Each run used a fresh temporary account,
+uploaded the same paper, scoped chat to that document with `top_k=5`, and
+deleted the uploaded document and revoked the token afterward. The temporary
+account rows remain because there is no account-deletion endpoint.
 
-| Measure | Result |
-| --- | ---: |
-| Overall | 9/13 (69.2%) |
-| Answerable questions | 5/9 (55.6%) |
-| Unanswerable questions refused with no sources | 4/4 (100%) |
-| Indexed chunks | 140 |
+| Chunk size / overlap | Chunks | Total | Answerable | Strict refusals |
+| --- | ---: | ---: | ---: | ---: |
+| 1,000 / 150 (comparison baseline) | 140 | 8/13 (61.5%) | 5/9 (55.6%) | 3/4 (75%) |
+| 1,000 / 200 (selected demo setting) | 143 | 8/13 (61.5%) | 5/9 (55.6%) | 3/4 (75%) |
 
-The score requires an `ANSWERED` response, the expected source and page, and
-all required fact groups. Alternative wording in Q03 was corrected after
-reviewing its answer against page 4; the answer listed all four scenarios but
-used valid paraphrases that the original substring checker missed. Refusal
-passes only when the API returns `INSUFFICIENT_CONTEXT` and no sources.
+The only outcome change was Q11: at 1,000 / 150 the API returned an answer
+citing page 10, which failed the refusal check; at 1,000 / 200 it returned
+`UNVERIFIED_ANSWER` with no sources. That is a safe abstention, but the strict
+metric counts only `INSUFFICIENT_CONTEXT`, so the refusal score remains 3/4.
+The 1,000 / 200 setting added three chunks and did not improve the aggregate
+score. This small single-document run is directional, not evidence that one
+splitter setting is generally better.
 
-## What failed
+The answerable score requires status `ANSWERED`, the expected source and page,
+and all required fact groups. An unanswerable question passes the strict
+refusal check only when status is `INSUFFICIENT_CONTEXT` and there are no
+sources. `UNVERIFIED_ANSWER` is reported separately because it withholds the
+draft and returns no sources, but is not counted as the expected refusal state.
 
-- **Q01, central research question:** the answer sounded plausible, but its only
-  cited passage came from page 14, the paper's references, rather than the
-  introduction on page 2. This is a grounding failure, even though the answer
-  resembles the actual research question.
-- **Q02, mitigation:** the answer mentioned an interception mechanism between
-  the harness and model, but omitted that it must be outside the agent host's
-  control and use append-only records.
-- **Q04, deletion exception:** the answer discussed refusal to fabricate reset
-  events and trace recreation after deletion. It did not answer the question
-  about Muse Spark and the Muse Code harness.
-- **Q07, peer workspaces:** the answer said “most models” where the paper says
-  every tested model except Muse Spark. It was therefore incomplete.
+## Misses and known limits
 
-Q03 was correct on manual review after allowing the documented paraphrases.
-Q05, Q06, Q08, and Q09 passed the fact and citation checks. All four questions
-about unreported costs, timing, deleted bytes, and electricity cost were
-correctly refused without sources.
+The 1,000 / 200 run passed Q03, Q05, Q06, Q08, Q09, Q10, Q12, and Q13. It
+missed:
 
-## Limits and next steps
+- **Q01, central research question:** weak reranker evidence caused a refusal.
+  This avoids the prior run's wrong-page answer, but also rejects an answerable
+  question (a false refusal).
+- **Q02, mitigation:** the answer omitted the outside-host and append-only
+  requirements.
+- **Q04, deletion exception:** the cited page was relevant, but the answer
+  omitted Muse Spark, the Muse Code harness, and that deletion was blocked on
+  every attempt.
+- **Q07, peer workspaces:** the answer was incomplete about the models and
+  their at-least-90% result.
+- **Q11, median time:** the draft had no valid citation, so the API returned
+  `UNVERIFIED_ANSWER` rather than the strict insufficient-context response.
 
-This is a small, single-document run. Fact checking is based on expected terms,
-source filename, and page, followed by manual review; it is not a semantic
-judge and does not prove that every sentence is entailed by a cited chunk. The
-Q01 result demonstrates that valid-looking answer text and a citation do not
-guarantee grounding. RAGAS was not run, and no exact Bedrock cost was captured.
-Bedrock embedding, reranking, and generation requests were made and may incur
-charges.
+The low-score gate, document-only prompt, citation-ID check, and model-based
+check over cited passages are safeguards, not a guarantee. The verifier uses
+the same selected chat model, and the misses above show it can accept incomplete
+answers. The threshold is a simple demo setting, not a broadly calibrated
+relevance boundary. RAGAS was not run and exact Bedrock costs were not captured.
+Embedding, reranking, answer, and verification calls may incur charges.
 
-For the walkthrough, show Q05 or Q08 as a supported answer and Q10 as a refusal.
-Also show Q01 as a known failure: retrieval cited the wrong page. The next
-engineering task should improve evidence sufficiency/citation validation and
-then rerun this unchanged set. Do not present this evaluation as proof that the
-chatbot cannot hallucinate.
+For the walkthrough, Q05 or Q08 is a supported answer; Q10 is a strict refusal;
+Q01 demonstrates the relevance gate; Q02 or Q07 demonstrates the remaining
+answer-completeness limitation. Do not describe this small evaluation as proof
+that hallucinations are eliminated.

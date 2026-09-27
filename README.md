@@ -225,11 +225,18 @@ its cited text or use a tested relevance threshold.
 
 ## Choices and limits
 
-- `RecursiveCharacterTextSplitter` tries natural text boundaries and keeps
-  overlap between adjacent chunks. The initial size and overlap are reasonable
-  demo defaults, not measured optimal values. Small chunks are precise but can
-  lose context; large chunks retain context but can dilute matching and use
-  more tokens per later answer call.
+- `RecursiveCharacterTextSplitter` fits the mixed PDF and plain-text inputs:
+  it tries paragraph, line, and word boundaries before cutting at the character
+  limit, and `split_documents` keeps each page's source metadata. The default
+  1,000-character size and 150-character overlap are simple demo settings, not
+  measured optimal values. A heading-based splitter is less useful when PDF
+  extraction loses heading structure; a token splitter would control prompt
+  length more precisely, but does not by itself preserve natural boundaries.
+  Smaller chunks can pinpoint evidence but lose context; larger chunks create
+  fewer embeddings yet may dilute retrieval and lengthen answer prompts. For
+  large files, the current settings can create many chunks and slow synchronous
+  ingestion. We should compare sizes (for example 1,000/150 versus 1,500/200)
+  on the evaluation questions before changing the splitter or its settings.
 - Amazon Titan Text Embeddings V2 is the default embedding model. The same
   configured embedding object/model is used for document and query vectors.
 - Qwen3 32B (`BEDROCK_CHAT_MODEL_ID`) is used for normal answers; GPT-OSS 20B

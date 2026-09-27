@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1800" height="1120" viewBox="0 0 1800 1120" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1800" height="1280" viewBox="0 0 1800 1280" role="img" aria-labelledby="title desc">
 <title id="title">Document Q&amp;A AWS demo architecture</title>
-<desc id="desc">A local browser calls an HTTPS Application Load Balancer, which routes to one Amazon ECS Fargate task in a public subnet in the us-east-1 default VPC. The task uses a PostgreSQL pgvector EC2 host, S3, Amazon Bedrock, Secrets Manager, ECR, and CloudWatch. Security group and IAM boundaries are shown.</desc>
+<desc id="desc">A local browser calls an HTTPS Application Load Balancer, which routes to one Amazon ECS Fargate task using public subnets in two AZs inside the us-east-1 default VPC; PostgreSQL runs on an EC2 host in the us-east-1b public subnet. The task uses a PostgreSQL pgvector EC2 host, S3, Amazon Bedrock, Secrets Manager, ECR, and CloudWatch. Security group and IAM boundaries are shown.</desc>
 <!-- Official AWS Architecture Icons, July 2026 release; icons embedded for a portable single-file diagram. -->
 <defs>
   <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#167b72"/></marker>
@@ -10,8 +10,8 @@
     .title { font:700 34px Inter,Arial,sans-serif; fill:#182b3a; }
     .subtitle { font:400 16px Inter,Arial,sans-serif; fill:#52677a; }
     .region { fill:#fff; stroke:#8aa9c2; stroke-width:2; }
-    .vpc { fill:#f9fbff; stroke:#527da1; stroke-width:2; }
-    .az { fill:#f4f8fc; stroke:#9bb1c5; stroke-width:1.5; stroke-dasharray:8 7; }
+    .vpc { fill:#f9fbff; stroke:#315f82; stroke-width:3.5; }
+    .az { fill:#eef5fb; stroke:#6589a8; stroke-width:2; stroke-dasharray:8 7; }
     .service-card { fill:#fff; stroke:#d5e0e9; stroke-width:1.5; }
     .node { fill:#fff; stroke:#b9cbd9; stroke-width:1.5; }
     .card-title { font:700 18px Inter,Arial,sans-serif; fill:#24394a; }
@@ -28,7 +28,7 @@
     .flow-label { font:600 12px Inter,Arial,sans-serif; fill:#167b72; }
   </style>
 </defs>
-<rect class="bg" width="1800" height="1120"/>
+<rect class="bg" width="1800" height="1280"/>
 <image href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAIAAAADnC86AAAAAXNSR0IArs4c6QAAAERlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAA6ABAAMAAAABAAEAAKACAAQAAAABAAAAKKADAAQAAAABAAAAKAAAAAB65masAAAEgElEQVRYCWNU0bdjGAjANBCWguwctZhuIT8a1KNBTbMQGE1ckKBVlJftaq46sH3V1VN7DmxbWZybyszMrKGmsnTuRHMTA4gaHw9nINdATwvC9XB1AHL5+fmkJMSn9DSdObj58slda5fMsDI3xhpdLFhFDfV1/v//N2navC9fv9pamWUkx7x7/3H1+q1G+jr+3m4nz1wA6gr29zQzNvB0dbxw6RqQGx7kA7Ty48dPi2b2CQsJdvRP//Tps6a6qqiIMFYrsFu8btN2IIJo2LXvsK21uZW50fwlq06cPg/xATMTE9ARZ85fNjHSAypjZWU1NtRdvnoTkKGuqgR04poN24DiQL1YbQUKYrcYKAF0tbGBDg8Pz4uXr4BuFxTgBwru2X+koapQRlpSSICfjY115rylMya0cnFx6mqpc3Jw7Np76Pfv3wcOnwgN9Aa6YOvOfcdPnfvz5w9Wu7Fb7Opo29tW8+79h7v3Hwnw86ooyV+/eQdk8YEj9ZUFQE/zcHNdvnbz+Kmz//79A3rd1Fj/9Zt35y9dBaopqW7NSo3183IFxsXrN2/L6zoOHzuFaTcj1obAkV1rf/365eoX/fffP6CeDctn//37NzgmA8het2zWw4dPODjZ79572DNp1vJ5k0+dvWBlbnL95u261j64BYyMjMBk2NFY8ePnT4/AOLg4nIElHzMxMQkJ8j9++hxiq4qSgqqyIi8vD0TPnn2HLcyMTA31Tp+7CBQB2upoZ6WrowGPTmAUAMX///8PTBDAoBYXEwE6Am4fnIElqIGht+/gMVcn25kT2799+26or33m/CVg8MrJSj16/AwY2oU5KUA3AVMW0BRgCs9Kjfv0+QvQGiBXWVF+zZLpQPtev36nrCRvaqQ3Y+4SoCPg9sEZ2IOag509OjwA6NG79x9u3Lr758+fQIu37z4A0QZMO9+//9iyYy+QC8zf0WH+Dx8/PXjkJETW2sLEztpcQlwUmLX2HTp+4PBxiDgaid1iNEW04GIJampZAyxPtDRUOTk5bt99cOMWKFMgAywWG+ppX7h8DWvEIOvEzw7wcXOytwZma011FRkpST1LdzT1zEIS8mhCpkb6DVVF3759u/fgEdnW37h1F5gmgEXK/YePjQx0lqxcj2YLFotv3bl39vyl2vK8xJhQPj7et+/ev//wEU0bQa6sjFRsRFBeRuKvX78fPHwMSfPIunAmLmB2TImLSIoNA1Y4N2/fO3zs5JVrt65evwVMwLiCQUxUREdLDVhzWJgaamuq7T90rLV7SllBRk1zD6bTcVoMcR2wHI4JD0yOCxcSFICIAOurV6/efvz8+SMw8375ysbGBiw+gSW5vKw0UDFQDbCMO3T05KLl644cPw0sOhQVZO/dfwTRi0wSsBiilIWFBVgg21mbATOohpoy1pIIWFZfvHLt5OkLW3bsefP2PbIdWNlEWYysE5g9REWERISERESEuLk4P3z8/OHDxxevXj9/8QpZGUE2yRYTNJFIBVgqCSJ1Uqhs1GIKA5B47aNBTXxYUahy5AU1AD0k0AuulD18AAAAAElFTkSuQmCC" x="40" y="28" width="56" height="56" preserveAspectRatio="xMidYMid meet"/>
 <text class="title" x="112" y="67">Document Q&amp;A · AWS demo architecture</text>
 <text class="subtitle" x="42" y="105">Live backend · us-east-1 · default VPC · one Fargate task · frontend remains local</text>
@@ -56,12 +56,17 @@
 
 <!-- Default VPC and public AZs -->
 <rect class="vpc" x="340" y="218" width="900" height="782" rx="24"/>
-<rect x="365" y="198" width="270" height="39" rx="19" fill="#e9f1f8" stroke="#527da1"/>
-<text class="heading-chip" x="389" y="223">Default VPC · 172.31.0.0/16</text>
+<rect x="365" y="193" width="420" height="46" rx="12" fill="#e3eff8" stroke="#315f82" stroke-width="2"/>
+<text class="heading-chip" x="382" y="222">DEFAULT VPC · 172.31.0.0/16</text>
+<text class="tiny" x="620" y="222">VPC boundary</text>
 <rect class="az" x="365" y="260" width="410" height="700" rx="18"/>
 <rect class="az" x="795" y="260" width="420" height="700" rx="18"/>
-<text class="label" x="386" y="293">us-east-1a · public subnet</text>
-<text class="label" x="816" y="293">us-east-1b · public subnet</text>
+<rect x="366" y="261" width="408" height="49" rx="16" fill="#dceaf5" opacity=".95"/>
+<rect x="796" y="261" width="418" height="49" rx="16" fill="#dceaf5" opacity=".95"/>
+<text class="label" x="386" y="282">PUBLIC SUBNET · us-east-1a</text>
+<text class="tiny" x="386" y="300">Inside default VPC</text>
+<text class="label" x="816" y="282">PUBLIC SUBNET · us-east-1b</text>
+<text class="tiny" x="816" y="300">Inside default VPC</text>
 
 <!-- Load balancer spans the public subnets -->
 <g>
@@ -81,7 +86,7 @@
   <image href="data:image/png;base64,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" x="592" y="518" width="48" height="48" preserveAspectRatio="xMidYMid meet"/>
   <text class="card-title" x="650" y="542">Amazon ECS on Fargate</text>
   <text class="card-detail" x="595" y="578">FastAPI · 1 running task · 0.25 vCPU · 1 GiB</text>
-  <text class="card-detail" x="595" y="602">Public IP for outbound AWS service access</text>
+  <text class="card-detail" x="595" y="602">Service uses both public subnets · 1 task at a time</text>
   <text class="tiny" x="595" y="627">Task SG accepts port 8000 from ALB SG only</text>
   <rect x="590" y="650" width="389" height="30" rx="8" fill="#edf5f3"/>
   <text class="chip" x="603" y="670">Task role: scoped S3 + Bedrock permissions</text>
@@ -94,7 +99,8 @@
   <text class="card-title" x="918" y="791">Amazon EC2 · PostgreSQL</text>
   <text class="card-detail" x="918" y="818">t3a.micro · PostgreSQL 16 + pgvector</text>
   <text class="card-detail" x="838" y="856">Private IP 172.31.88.125 · TCP 5432</text>
-  <text class="tiny" x="838" y="878">Ingress from task SG only · public subnet/public IP</text>
+  <text class="tiny" x="838" y="878">us-east-1b · public subnet · EC2 public IP</text>
+  <text class="tiny" x="838" y="898">Inbound TCP 5432: task SG only; blocked from internet</text>
 </g>
 <path class="flow" d="M926 698 V733 Q926 744 938 753"/>
 <rect class="flow-label-bg" x="940" y="711" width="132" height="24" rx="8"/>
@@ -121,17 +127,16 @@
       <text class="card-detail" x="1364" y="550">Private bucket · SSE-S3 · users/* objects</text>
     </g>
 <g>
-      <rect class="service-card" x="1270" y="590" width="340" height="110" rx="16"/>
+      <rect class="service-card" x="1270" y="590" width="340" height="220" rx="16"/>
       <image href="data:image/png;base64,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" x="1286" y="613" width="64" height="64" preserveAspectRatio="xMidYMid meet"/>
       <text class="card-title" x="1364" y="633">Amazon Bedrock</text>
-      <text class="card-detail" x="1364" y="660">Titan embeddings · Qwen 32B · GPT-OSS 20B</text>
+      <text class="card-detail" x="1364" y="660">Titan embeddings · us-east-1</text>
+      <text class="card-detail" x="1364" y="684">Qwen 32B + GPT-OSS 20B · us-east-1</text>
+      <text class="card-detail" x="1364" y="708">Cohere Rerank 3.5 · us-east-1</text>
+      <text class="tiny" x="1364" y="742">Embeddings, answer generation, and</text>
+      <text class="tiny" x="1364" y="760">reranking are Bedrock model calls.</text>
     </g>
-<g>
-      <rect class="service-card" x="1270" y="716" width="340" height="94" rx="16"/>
-      <image href="data:image/png;base64,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" x="1286" y="731" width="64" height="64" preserveAspectRatio="xMidYMid meet"/>
-      <text class="card-title" x="1364" y="759">Amazon Bedrock</text>
-      <text class="card-detail" x="1364" y="786">Cohere Rerank 3.5 · top 5 candidates</text>
-    </g>
+
 <g>
       <rect class="service-card" x="1270" y="826" width="340" height="94" rx="16"/>
       <image href="data:image/png;base64,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" x="1286" y="841" width="64" height="64" preserveAspectRatio="xMidYMid meet"/>
@@ -145,7 +150,6 @@
 <path class="control" d="M1218 417 H1253"/>
 <path class="flow" d="M1218 527 H1253"/>
 <path class="flow" d="M1218 645 H1253"/>
-<path class="flow" d="M1218 763 H1253"/>
 <path class="control" d="M1218 873 H1253"/>
 <!-- Cost and security notes -->
 <rect x="365" y="970" width="410" height="55" rx="14" fill="#fff6e9" stroke="#e7b873"/>
@@ -155,6 +159,31 @@
 <text class="chip" x="815" y="993">Least-privilege roles</text>
 <text class="tiny" x="815" y="1012">Execution role: ECR, secret read, logs. Task role: model calls and S3 users/* only. DB remains in a public subnet.</text>
 
-<text class="tiny" x="42" y="1080">Official AWS Architecture Icons (July 2026 release), from aws.amazon.com/architecture/icons/ · diagram reflects deployment/resources.json.</text>
-<text class="tiny" x="1420" y="1080">Solid = application/data · dashed = startup/logging</text>
+<text class="heading-chip" x="42" y="1090">End-to-end application flow</text>
+<rect x="42" y="1110" width="1716" height="66" rx="14" fill="#e8f4f1" stroke="#9fc9c2"/>
+<text class="chip" x="62" y="1137">INGEST</text>
+<text class="small" x="150" y="1137">1 Upload PDF/TXT (JWT)</text>
+<text class="flow-label" x="430" y="1137">→</text>
+<text class="small" x="460" y="1137">2 Store original in S3</text>
+<text class="flow-label" x="740" y="1137">→</text>
+<text class="small" x="770" y="1137">3 Extract + LangChain split</text>
+<text class="flow-label" x="1050" y="1137">→</text>
+<text class="small" x="1080" y="1137">4 Titan embeds chunks</text>
+<text class="flow-label" x="1360" y="1137">→</text>
+<text class="small" x="1390" y="1137">5 Save vectors in pgvector</text>
+<text class="tiny" x="150" y="1159">Browser → ALB → ECS/Fargate · Bedrock model calls run in us-east-1</text>
+<rect x="42" y="1188" width="1716" height="66" rx="14" fill="#edf2f8" stroke="#b2c3d3"/>
+<text class="chip" x="62" y="1215">ASK</text>
+<text class="small" x="150" y="1215">1 Send question (JWT)</text>
+<text class="flow-label" x="430" y="1215">→</text>
+<text class="small" x="460" y="1215">2 Embed + pgvector top 5</text>
+<text class="flow-label" x="740" y="1215">→</text>
+<text class="small" x="770" y="1215">3 Cohere reranks candidates</text>
+<text class="flow-label" x="1050" y="1215">→</text>
+<text class="small" x="1080" y="1215">4 Qwen/GPT-OSS uses context</text>
+<text class="flow-label" x="1360" y="1215">→</text>
+<text class="small" x="1390" y="1215">5 Return answer + citations</text>
+<text class="tiny" x="150" y="1237">Insufficient evidence → refuse; model calls use Bedrock in us-east-1.</text>
+<text class="tiny" x="42" y="1273">Official AWS Architecture Icons (July 2026 release), from aws.amazon.com/architecture/icons/ · diagram reflects deployment/resources.json.</text>
+<text class="tiny" x="1420" y="1273">Solid = application/data · dashed = startup/logging</text>
 </svg>

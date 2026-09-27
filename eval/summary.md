@@ -61,7 +61,7 @@ first page of one PDF to limit embedding calls.
 
 RAGAS could add a model-judged faithfulness score without LangSmith, but it is
 not part of these results. Versions 0.4.3 and 0.3.9 failed to import alongside
-the project's installed LangChain Community package, so no RAGAS score is
-claimed. A compatible, isolated evaluator can be tried later; it would make
-additional judge-model calls and should complement the ground-truth and refusal
-counts above.
+the backend's installed LangChain Community package. An isolated environment
+in `../ragas-eval/` imports RAGAS 0.3.9 successfully, but no RAGAS metrics have
+been run. Judge-model calls may incur charges and should complement the
+ground-truth and refusal counts above.

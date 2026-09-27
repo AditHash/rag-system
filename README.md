@@ -319,8 +319,10 @@ task definition template, IAM policies, and live resource inventory are in
 [`deployment/`](deployment/README.md). They document the existing stack and
 provide reusable task and role artifacts; they do not recreate the entire VPC,
 security groups, database, load balancer, or DNS as infrastructure-as-code.
-The deployment guide includes an [AWS architecture diagram](deployment/aws-architecture.png)
-with official AWS service icons and its [standalone SVG source](deployment/aws-architecture.svg).
+The architecture diagram below uses official AWS service icons. Open the
+[standalone SVG](deployment/aws-architecture.svg) for a scalable version.
+
+![AWS architecture diagram for the live Document Q&A demo](deployment/aws-architecture.png)
 
 ## Manual checks
 

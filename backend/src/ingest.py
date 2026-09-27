@@ -3,6 +3,7 @@
 from io import BytesIO
 from uuid import uuid4
 
+import boto3
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pypdf import PdfReader
@@ -43,8 +44,22 @@ def read_upload(filename: str, content: bytes) -> list[Document]:
 
 
 def ingest_file(filename: str, content: bytes, user_id: str) -> tuple[str, int]:
-    """Split a file, embed its chunks, and add them to PostgreSQL."""
+    """Save the original if configured, then embed its chunks in PostgreSQL."""
     pages = read_upload(filename, content)
+    document_id = pages[0].metadata["document_id"]
+    if config.S3_BUCKET:
+        extension = filename.rsplit(".", 1)[-1].lower()
+        s3_key = f"users/{user_id}/documents/{document_id}/original.{extension}"
+        boto3.client("s3", region_name=config.AWS_REGION).put_object(
+            Bucket=config.S3_BUCKET,
+            Key=s3_key,
+            Body=content,
+            ContentType="application/pdf" if extension == "pdf" else "text/plain",
+            ServerSideEncryption="AES256",
+        )
+        for page in pages:
+            page.metadata["s3_key"] = s3_key
+
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=config.CHUNK_SIZE,
         chunk_overlap=config.CHUNK_OVERLAP,
@@ -55,7 +70,6 @@ def ingest_file(filename: str, content: bytes, user_id: str) -> tuple[str, int]:
         chunk.metadata["chunk_index"] = chunk_index
         chunk.metadata["user_id"] = user_id
 
-    document_id = pages[0].metadata["document_id"]
     chunk_ids = [str(uuid4()) for _ in chunks]
     get_vector_store().add_documents(chunks, ids=chunk_ids)
     return document_id, len(chunks)

@@ -24,7 +24,8 @@ billable Bedrock calls.
 ## Configure and run
 
 From `backend/`, copy `.env.example` to `.env` and fill in the database URL and
-`JWT_SECRET`. Generate the secret locally with
+`JWT_SECRET`. Set `S3_BUCKET` to an existing private bucket to keep original
+uploads; leave it empty for a local vector-only run. Generate the secret locally with
 `python -c 'import secrets; print(secrets.token_urlsafe(48))'` and paste it into
 `.env`; keep that file private. The backend creates `app_users` and
 `revoked_tokens` tables on startup. A missing or short JWT secret stops startup.
@@ -48,9 +49,12 @@ postgresql+psycopg://user:password@localhost:5432/document_db
 
 The LangChain vector store creates its own tables in the configured database.
 The PostgreSQL server must already have pgvector installed. Model IDs, region,
-chunk size, overlap, collection name, and database URL are configurable
+chunk size, overlap, collection name, S3 bucket, and database URL are configurable
 in `backend/src/config.py` through environment variables. `AWS_PROFILE` is read
 by the standard AWS credential chain and does not need to be copied into code.
+The configured AWS identity needs `s3:PutObject` for the bucket's `users/*` keys
+when `S3_BUCKET` is set. The bucket and Bedrock models must use the configured
+`AWS_REGION` (currently `us-east-1`).
 
 Check the process health and interactive API documentation:
 
@@ -122,7 +126,11 @@ to all accounts; re-upload those files while logged in.
 PDF and UTF-8 TXT files up to 10 MiB are accepted. The endpoint extracts text,
 keeps the source filename and 1-based page in LangChain document metadata,
 splits text into 1,000-character chunks with 150 characters of overlap by
-default, embeds the chunks, and stores them in PostgreSQL.
+default, embeds the chunks, and stores them in PostgreSQL. If `S3_BUCKET` is set,
+the original file is first stored at
+`users/<user_id>/documents/<document_id>/original.pdf` (or `.txt`). The key uses
+server-generated IDs, not an untrusted filename; it is saved in chunk metadata.
+The object is private and explicitly uses SSE-S3 encryption.
 
 ```bash
 curl --fail --show-error \
@@ -142,8 +150,10 @@ Example response:
 }
 ```
 
-Ingestion is synchronous in this demo. It returns only after the Bedrock
-embeddings and PostgreSQL writes finish.
+Ingestion is synchronous in this demo. It returns only after the optional S3
+write, Bedrock embeddings, and PostgreSQL writes finish. If embedding or database
+storage fails after S3 succeeds, the original remains in S3 for recovery; the
+current demo has no cleanup or retry job.
 
 ## Search stored documents
 
@@ -230,8 +240,10 @@ its cited text or use a tested relevance threshold.
   relate to the question. The installed LangChain AWS package has no direct
   reranker integration, so this one call uses Boto3. `/search` still shows raw
   pgvector results to make the first retrieval stage easy to inspect.
-- Raw files are not saved to S3 in this local first version. A new upload gets a
-  new document ID; there is no delete endpoint yet.
+- Raw files are saved to S3 only when `S3_BUCKET` is configured. A new upload gets
+  a new document ID; there is no delete endpoint yet. An S3 key prefix separates
+  objects by user, while bucket access is controlled by IAM rather than the key
+  name itself.
 - PDF text extraction does not OCR scanned pages. A file with no extracted
   text is rejected.
 - JWTs are stored in browser session storage for this small demo. Use HTTPS

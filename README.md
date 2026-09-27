@@ -265,10 +265,58 @@ its cited text or use a tested relevance threshold.
   expiry or revocation. There is no signup rate limit, password reset, or email
   verification yet.
 - The current evaluation scored 11/13; two absent-fact questions exposed
-  refusal-classification errors. There is no cloud deployment yet. Reranking
-  improves ordering, but does not prove that a chunk answers the question.
+  refusal-classification errors. Reranking improves ordering, but does not
+  prove that a chunk answers the question.
   The prompt and citation-ID check are basic safeguards; there is no tested
   relevance threshold or claim-by-claim evidence verification yet.
+
+## AWS demo deployment
+
+The API is deployed in `us-east-1` in the account's default VPC. Open
+[`https://rag-demo.cwmgenai.com/docs`](https://rag-demo.cwmgenai.com/docs) for
+the interactive API documentation; [`/health`](https://rag-demo.cwmgenai.com/health)
+checks that the service is responding. The frontend is not hosted by this
+deployment.
+
+An HTTPS Application Load Balancer forwards requests to one small Fargate task.
+The task uses a public IP for outbound access to ECR, S3, and Bedrock, while its
+security group accepts application traffic only from the load balancer. HTTP
+redirects to HTTPS. The task uses the `document-qa-task` role for the configured
+Bedrock models and only `PutObject`/`DeleteObject` under the bucket's
+`users/*` prefix. A separate `document-qa-execution` role can pull the single
+ECR repository, read the runtime secret, and write to the API log group.
+
+PostgreSQL 16 with pgvector runs on the existing `t3a.micro` EC2 instance in the
+same VPC. The application database URL and JWT signing key are held in the
+`document-qa/runtime` Secrets Manager secret and injected when the task starts;
+no static AWS credentials are stored in the container. PostgreSQL port 5432 is
+allowed only from the API task security group. The instance has a public IP
+because it was created in a default public subnet, but its security group does
+not allow internet access to PostgreSQL; SSH is restricted to the operator's
+current public IP. This is network-filtered access, not a private-subnet setup.
+
+The previous database was moved from `ap-south-2`, verified, and its old EC2
+instance was terminated. Its four vector rows remain in the new database. They
+pre-date user ownership metadata, so they are not listed or returned by the
+current per-user API; newly ingested documents are scoped to the signed-in user.
+
+The deployment uses one task with 0.25 vCPU and 1 GiB memory, one ALB, one
+`t3a.micro` database instance, one Secrets Manager secret, and short-retention
+logs. At low traffic, the expected infrastructure charge is roughly USD 4–6
+for 72 hours, before any Bedrock inference, substantial data transfer, or
+unexpected account-specific charges. This is an estimate, not a spending cap;
+check the AWS bill. A one-time shutdown is scheduled for 2026-09-30 12:58 UTC:
+it scales the ECS service to zero, stops the database instance, and deletes the
+load balancer. The database EBS volume and small storage charges remain so its
+data is preserved. AWS bills for Fargate task resources and ALB running time
+([Fargate pricing](https://aws.amazon.com/fargate/pricing/),
+[ALB pricing](https://aws.amazon.com/elasticloadbalancing/pricing/), and public
+IPv4 addresses at the applicable hourly rate
+([AWS public IPv4 pricing notice](https://aws.amazon.com/blogs/aws/new-aws-public-ipv4-address-charge-public-ip-insights/)). Ingestion,
+search, and chat call Bedrock and can incur additional usage charges; no
+Bedrock inference was made as part of deployment. The AWS resources were created
+through the CLI and are not yet represented by an infrastructure-as-code
+template.
 
 ## Manual checks
 

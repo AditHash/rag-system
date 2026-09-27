@@ -36,29 +36,30 @@ def create_documents_table() -> None:
                     INSERT INTO uploaded_documents
                         (id, user_id, filename, s3_bucket, s3_key, chunk_count)
                     SELECT
-                        CASE WHEN cmetadata->>'document_id' ~*
+                        CASE WHEN langchain_pg_embedding.cmetadata->>'document_id' ~*
                                   '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-                             THEN (cmetadata->>'document_id')::uuid END,
-                        CASE WHEN cmetadata->>'user_id' ~*
+                             THEN (langchain_pg_embedding.cmetadata->>'document_id')::uuid END,
+                        CASE WHEN langchain_pg_embedding.cmetadata->>'user_id' ~*
                                   '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-                             THEN (cmetadata->>'user_id')::uuid END,
-                        max(cmetadata->>'source'),
-                        CASE WHEN max(cmetadata->>'s3_key') IS NOT NULL
+                             THEN (langchain_pg_embedding.cmetadata->>'user_id')::uuid END,
+                        max(langchain_pg_embedding.cmetadata->>'source'),
+                        CASE WHEN max(langchain_pg_embedding.cmetadata->>'s3_key') IS NOT NULL
                              THEN :bucket ELSE NULL END,
-                        max(cmetadata->>'s3_key'),
-                        count(DISTINCT cmetadata->>'chunk_index')::integer
+                        max(langchain_pg_embedding.cmetadata->>'s3_key'),
+                        count(DISTINCT langchain_pg_embedding.cmetadata->>'chunk_index')::integer
                     FROM langchain_pg_embedding
                     JOIN langchain_pg_collection
                       ON langchain_pg_collection.uuid = langchain_pg_embedding.collection_id
-                    WHERE cmetadata ? 'document_id'
-                      AND cmetadata ? 'user_id'
-                      AND cmetadata ? 'source'
+                    WHERE langchain_pg_embedding.cmetadata ? 'document_id'
+                      AND langchain_pg_embedding.cmetadata ? 'user_id'
+                      AND langchain_pg_embedding.cmetadata ? 'source'
                       AND langchain_pg_collection.name = :collection_name
-                      AND cmetadata->>'document_id' ~*
+                      AND langchain_pg_embedding.cmetadata->>'document_id' ~*
                           '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-                      AND cmetadata->>'user_id' ~*
+                      AND langchain_pg_embedding.cmetadata->>'user_id' ~*
                           '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-                    GROUP BY cmetadata->>'document_id', cmetadata->>'user_id'
+                    GROUP BY langchain_pg_embedding.cmetadata->>'document_id',
+                             langchain_pg_embedding.cmetadata->>'user_id'
                     ON CONFLICT (id) DO NOTHING
                 """),
                 {

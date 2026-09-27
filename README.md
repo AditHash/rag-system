@@ -8,8 +8,28 @@ It provides an ingestion route, a search route for inspecting retrieval, and a
 chat route that retrieves chunks and uses them to generate a cited answer.
 Accounts use JWT bearer tokens; uploaded chunks and retrieval are scoped to the
 authenticated user.
-The small [evaluation set and measured results](eval/summary.md) cover answerable
-questions, refusals, and user isolation.
+The paper-specific [evaluation set and measured results](eval/llm_agents_dataset.md)
+cover answerable questions and refusal behavior. The previous synthetic-corpus
+baseline is documented separately in [eval/summary.md](eval/summary.md).
+
+## Assessment deliverables
+
+- **Working demo:** the deployed backend and interactive API docs are available
+  at [`rag-demo.cwmgenai.com/docs`](https://rag-demo.cwmgenai.com/docs). The
+  frontend is provided for local use and is not hosted.
+- **Source and walkthrough notes:** this README describes how to run the app,
+  its ingestion and retrieval flow, chunking and reranking choices, grounding
+  limits, and AWS deployment.
+- **Evaluation:** the 13-question paper-specific set and measured results are
+  in [`questions_llm_agents.jsonl`](eval/questions_llm_agents.jsonl) and
+  [`llm_agents_dataset.md`](eval/llm_agents_dataset.md). The live run scored
+  9/13 overall; all four questions absent from the paper were correctly
+  refused.
+- **Architecture:** the flow and architecture diagram is
+  [`rag.drawio.svg`](rag.drawio.svg); [`deployment/`](deployment/README.md)
+  contains the deployment guide and detailed AWS infrastructure diagram.
+- **Deployment artifacts:** task definition and least-privilege IAM policy
+  examples are documented in [`deployment/README.md`](deployment/README.md).
 
 ## Requirements
 
@@ -21,6 +41,33 @@ questions, refusals, and user isolation.
 
 No AWS resources are provisioned by these instructions. Embedding requests are
 billable Bedrock calls.
+
+## Run the full demo locally
+
+The backend needs PostgreSQL/pgvector, a configured `backend/.env`, and AWS
+credentials with permission to call the configured Bedrock models. Start it in
+one terminal:
+
+```bash
+cd backend
+cp .env.example .env
+# Edit .env with your database URL and a private JWT_SECRET.
+uv sync --frozen
+uv run main.py
+```
+
+In a second terminal, start the frontend:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open `http://127.0.0.1:5173`. Its development server forwards API requests to
+the backend at `http://127.0.0.1:8000`. The backend is the hosted deliverable;
+the frontend is only provided for a local walkthrough. Uploading or asking a
+question can make billable Bedrock requests.
 
 ## Configure and run
 
@@ -264,9 +311,11 @@ its cited text or use a tested relevance threshold.
   before exposing the app publicly, since a stolen token grants access until
   expiry or revocation. There is no signup rate limit, password reset, or email
   verification yet.
-- The current evaluation scored 11/13; two absent-fact questions exposed
-  refusal-classification errors. Reranking improves ordering, but does not
-  prove that a chunk answers the question.
+- The paper-specific evaluation scored 9/13 overall (5/9 answerable; 4/4
+  absent-answer questions refused). It exposed a grounding failure where the
+  answer cited the paper's references, plus incomplete answers; see the
+  [evaluation report](eval/llm_agents_dataset.md). Reranking improves ordering,
+  but does not prove that a chunk answers the question.
   The prompt and citation-ID check are basic safeguards; there is no tested
   relevance threshold or claim-by-claim evidence verification yet.
 

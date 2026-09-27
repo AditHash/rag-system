@@ -1,0 +1,67 @@
+{
+  "region": "us-east-1",
+  "network": {
+    "vpc_id": "vpc-0c7502d88ca2b085f",
+    "ecs_subnets": [
+      {
+        "id": "subnet-01779b2acad778642",
+        "availability_zone": "us-east-1a",
+        "public_ip_on_launch": true
+      },
+      {
+        "id": "subnet-0412230d1da0233bf",
+        "availability_zone": "us-east-1b",
+        "public_ip_on_launch": true
+      }
+    ],
+    "security_groups": {
+      "alb": "sg-061bc82bf78e47715",
+      "ecs_task": "sg-09955622918e352d5",
+      "postgres_ec2": "sg-0dd11c626b5e297b2"
+    },
+    "rules": [
+      "Internet to ALB: TCP 80 and 443",
+      "ALB security group to ECS task security group: TCP 8000",
+      "ECS task security group to PostgreSQL EC2 security group: TCP 5432",
+      "Operator public IPv4 /32 to PostgreSQL EC2 security group: TCP 22"
+    ]
+  },
+  "ecr": {
+    "repository": "document-qa-api"
+  },
+  "ecs": {
+    "cluster": "document-qa-demo",
+    "service": "api",
+    "task_definition_family": "document-qa-api",
+    "desired_count": 1,
+    "cpu": 256,
+    "memory_mib": 1024,
+    "task_security_group": "sg-09955622918e352d5",
+    "assign_public_ip": true,
+    "container_name": "api",
+    "container_port": 8000
+  },
+  "load_balancer": {
+    "name": "document-qa-api",
+    "target_group": "document-qa-api",
+    "health_path": "/health",
+    "public_hostname": "rag-demo.cwmgenai.com"
+  },
+  "database": {
+    "type": "PostgreSQL on EC2",
+    "instance_id": "i-00a2accfabdc0998b",
+    "instance_type": "t3a.micro",
+    "private_ipv4": "172.31.88.125",
+    "vpc_id": "vpc-0c7502d88ca2b085f",
+    "subnet_id": "subnet-0412230d1da0233bf",
+    "security_group": "sg-0dd11c626b5e297b2",
+    "public_subnet": true,
+    "postgres_ingress_source": "sg-09955622918e352d5"
+  },
+  "storage": {
+    "s3_bucket": "sample-pdf-bucket-01-09-206",
+    "object_prefix": "users/*",
+    "runtime_secret_name": "document-qa/runtime",
+    "log_group": "/ecs/document-qa-api"
+  }
+}

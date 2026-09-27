@@ -1,0 +1,31 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "StoreAndDeleteUserDocuments",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:DeleteObject"
+      ],
+      "Resource": "arn:aws:s3:::sample-pdf-bucket-01-09-206/users/*"
+    },
+    {
+      "Sid": "InvokeConfiguredBedrockModels",
+      "Effect": "Allow",
+      "Action": "bedrock:InvokeModel",
+      "Resource": [
+        "arn:aws:bedrock:us-east-1::foundation-model/amazon.titan-embed-text-v2:0",
+        "arn:aws:bedrock:us-east-1::foundation-model/qwen.qwen3-32b-v1:0",
+        "arn:aws:bedrock:us-east-1::foundation-model/openai.gpt-oss-20b-1:0",
+        "arn:aws:bedrock:us-east-1::foundation-model/cohere.rerank-v3-5:0"
+      ]
+    },
+    {
+      "Sid": "RerankRetrievedDocuments",
+      "Effect": "Allow",
+      "Action": "bedrock:Rerank",
+      "Resource": "*"
+    }
+  ]
+}

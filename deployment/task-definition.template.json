@@ -1,0 +1,87 @@
+{
+  "family": "document-qa-api",
+  "taskRoleArn": "arn:aws:iam::${AWS_ACCOUNT_ID}:role/document-qa-task",
+  "executionRoleArn": "arn:aws:iam::${AWS_ACCOUNT_ID}:role/document-qa-execution",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "256",
+  "memory": "1024",
+  "runtimePlatform": {
+    "cpuArchitecture": "X86_64",
+    "operatingSystemFamily": "LINUX"
+  },
+  "containerDefinitions": [
+    {
+      "name": "api",
+      "image": "${IMAGE_URI}",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "hostPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "S3_BUCKET",
+          "value": "sample-pdf-bucket-01-09-206"
+        },
+        {
+          "name": "AWS_REGION",
+          "value": "${AWS_REGION}"
+        },
+        {
+          "name": "AWS_DEFAULT_REGION",
+          "value": "${AWS_REGION}"
+        },
+        {
+          "name": "BEDROCK_EMBEDDING_MODEL_ID",
+          "value": "amazon.titan-embed-text-v2:0"
+        },
+        {
+          "name": "BEDROCK_CHAT_MODEL_ID",
+          "value": "qwen.qwen3-32b-v1:0"
+        },
+        {
+          "name": "BEDROCK_THINKING_MODEL_ID",
+          "value": "openai.gpt-oss-20b-1:0"
+        },
+        {
+          "name": "BEDROCK_RERANK_MODEL_ID",
+          "value": "cohere.rerank-v3-5:0"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "DATABASE_URL",
+          "valueFrom": "${RUNTIME_SECRET_ARN}:DATABASE_URL::"
+        },
+        {
+          "name": "JWT_SECRET",
+          "valueFrom": "${RUNTIME_SECRET_ARN}:JWT_SECRET::"
+        }
+      ],
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)\""
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/document-qa-api",
+          "awslogs-region": "${AWS_REGION}",
+          "awslogs-stream-prefix": "api"
+        }
+      }
+    }
+  ]
+}

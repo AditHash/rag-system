@@ -314,9 +314,11 @@ data is preserved. AWS bills for Fargate task resources and ALB running time
 IPv4 addresses at the applicable hourly rate
 ([AWS public IPv4 pricing notice](https://aws.amazon.com/blogs/aws/new-aws-public-ipv4-address-charge-public-ip-insights/)). Ingestion,
 search, and chat call Bedrock and can incur additional usage charges; no
-Bedrock inference was made as part of deployment. The AWS resources were created
-through the CLI and are not yet represented by an infrastructure-as-code
-template.
+Bedrock inference was made as part of deployment. The current deployment guide,
+task definition template, IAM policies, and live resource inventory are in
+[`deployment/`](deployment/README.md). They document the existing stack and
+provide reusable task and role artifacts; they do not recreate the entire VPC,
+security groups, database, load balancer, or DNS as infrastructure-as-code.
 
 ## Manual checks
 

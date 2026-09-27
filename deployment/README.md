@@ -7,16 +7,12 @@ bucket, and Amazon Bedrock using its task role.
 
 ## Current layout
 
-```text
-Browser / local frontend
-        |
-Public ALB (HTTPS)
-        |
-ECS Fargate task, public subnet + public IP (port 8000)
-        |                  |                 |
-PostgreSQL EC2       Private S3 bucket    Bedrock
-same VPC             task IAM role        task IAM role
-```
+![AWS architecture diagram for the live Document Q&A demo](aws-architecture.png)
+
+The diagram uses the official AWS Architecture Icons and reflects the live
+resource inventory in `resources.json`. The editable, standalone vector original
+is [aws-architecture.svg](aws-architecture.svg). The browser frontend stays
+local; only the API is deployed to ECS.
 
 The app runs as one Fargate task (`256` CPU units, `1024` MiB). The ALB is the
 only network source allowed to reach task port 8000. The task security group is

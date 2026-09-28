@@ -49,7 +49,8 @@ def main() -> None:
     username = "eval_" + secrets.token_hex(6)
     alphabet = string.ascii_letters + string.digits
     password = "E" + "".join(secrets.choice(alphabet) for _ in range(30)) + "9!"
-    client = httpx.Client(base_url=BASE_URL, timeout=240)
+    timeout_seconds = int(os.environ.get("RAG_EVAL_TIMEOUT_SECONDS", "900"))
+    client = httpx.Client(base_url=BASE_URL, timeout=timeout_seconds)
     token = None
     document_id = None
     results = []

@@ -56,18 +56,45 @@ missed:
 - **Q11, median time:** the draft had no valid citation, so the API returned
   `UNVERIFIED_ANSWER` rather than the strict insufficient-context response.
 
-This live run included a model-based check over cited passages. That verifier
-used the same selected chat model as generation, added another billable model
-call and latency, and did not prevent all incomplete answers. It has since been
-removed. The current implementation adds an LLM-based retrieval sufficiency
-check before generation; that check was not part of this run and has not been
-evaluated. It adds a Bedrock call for questions that pass the check and can
-still make mistakes, so rerun the set before making claims about current
-behavior. The reranker threshold is a demo setting, not a calibrated relevance
-boundary. RAGAS was not run and exact Bedrock costs were not captured.
-Embedding, reranking, and answer calls may incur charges.
+This run included a model-based check over cited passages. That verifier used
+the same selected chat model as generation, added another billable model call
+and latency, and did not prevent all incomplete answers. It has since been
+removed. The previous 8/13 result below is historical.
+
+## Live evaluation after retrieval sufficiency check
+
+On 2026-09-28, the same 13 questions were run against the deployed ECS API at
+`https://rag-demo.cwmgenai.com` after deploying image `demo-1ccd623` (ECS task
+definition revision 8). The run used the selected 1,000 / 200 character chunk
+settings, `top_k=5`, the current reranker and its 0.15 score floor, and the new
+LLM-based retrieval sufficiency check. A fresh temporary account uploaded the
+paper, which produced 143 chunks. The evaluation script requested document
+deletion and logout after scoring; temporary account rows remain because the
+app has no account-deletion endpoint.
+
+| Measure | Previous live run | Current live run |
+| --- | ---: | ---: |
+| Overall | 8/13 (61.5%) | 9/13 (69.2%) |
+| Answerable with all expected facts and expected source/page | 5/9 (55.6%) | 5/9 (55.6%) |
+| Strict refusals | 3/4 (75%) | 4/4 (100%) |
+| Indexed chunks | 143 | 143 |
+
+The refusal score improved by one question, while answerable-question
+performance did not change. Q01 was a false refusal: it is answerable, but the
+retrieval check returned `INSUFFICIENT_CONTEXT`. Q02, Q04, and Q07 were marked
+`ANSWERED` with a source on an expected page, but omitted required fact groups.
+Q03, Q05, Q06, Q08, and Q09 passed. All four unanswerable questions (Q10–Q13)
+were refused with no sources.
+
+This is a small, single-paper scorecard, not proof that hallucinations have
+been eliminated. The retrieval check adds an LLM inference call and latency,
+and a refusal can be a false negative, as Q01 shows. Reranker scores and the
+0.15 cutoff are not calibrated confidence probabilities. The strict expected
+fact checks can also mark a correct paraphrase as a failure. RAGAS was not run
+and exact Bedrock costs were not captured. Embedding, reranking, evidence-check,
+and answer calls may incur charges.
 
 For the walkthrough, Q05 or Q08 is a supported answer; Q10 is a strict refusal;
-Q01 demonstrates the relevance gate; Q02 or Q07 demonstrates the remaining
-answer-completeness limitation. Do not describe this small evaluation as proof
-that hallucinations are eliminated.
+Q01 demonstrates the retrieval check's false-refusal tradeoff; Q02 or Q07
+demonstrates the remaining answer-completeness limitation. Do not describe this
+small evaluation as proof that hallucinations are eliminated.

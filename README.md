@@ -23,7 +23,7 @@ baseline is documented separately in [eval/summary.md](eval/summary.md).
 - **Evaluation:** the 13-question paper-specific set and measured results are
   in [`questions_llm_agents.jsonl`](eval/questions_llm_agents.jsonl) and
   [`llm_agents_dataset.md`](eval/llm_agents_dataset.md). The latest live run
-  scored 8/13 at the selected 1,000 / 200 chunk settings; see the report for
+  scored 9/13 at the selected 1,000 / 200 chunk settings; see the report for
   misses and the comparison with 1,000 / 150.
 - **Architecture:** the flow and architecture diagram is
   [`rag.drawio.svg`](rag.drawio.svg); [`deployment/`](deployment/README.md)
@@ -334,15 +334,12 @@ and [Bedrock pricing](https://aws.amazon.com/bedrock/pricing/).
   before exposing the app publicly, since a stolen token grants access until
   expiry or revocation. There is no signup rate limit, password reset, or email
   verification yet.
-- The latest paper-specific evaluation scored 8/13 (5/9 answerable; 3/4
-  strict refusals, with the remaining unanswerable question receiving an
-  unverified response without sources). That run used the now-removed extra
-  model verification call, so its results are historical and should be rerun
-  before describing current behavior. See the [evaluation report](eval/llm_agents_dataset.md).
-  Reranking, a score floor, prompt instructions, citation-ID validation, and
-  the retrieval sufficiency check reduce some risk but do not prove every
-  answer is grounded. The sufficiency check adds an LLM call and must be
-  evaluated before relying on its refusal behavior.
+- The latest paper-specific evaluation scored 9/13 (5/9 answerable; 4/4 strict
+  refusals) on ECS task definition revision 8 with the retrieval sufficiency
+  check enabled. The check improved strict refusal performance in this run but
+  falsely refused one answerable question, and three other answerable responses
+  omitted required facts. See the [evaluation report](eval/llm_agents_dataset.md).
+  These small-set results do not prove every answer is grounded.
 
 ## AWS demo deployment
 
